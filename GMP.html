@@ -467,9 +467,9 @@
     .panel { padding: 16px; }
     .panel h3 { font-size: 10px; letter-spacing: 0.16em; }
     .chart-wrap { height: 280px; }
-    /* Plano de Voo: 2 colunas */
-    .panel > div[style*="grid-template-columns: repeat(4, 1fr)"] {
-      grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important;
+    /* Plano de Voo: 1 coluna empilhada no mobile */
+    .plano-voo-grid {
+      grid-template-columns: 1fr !important; gap: 10px !important;
     }
     /* Tópicos */
     .topic-head { padding: 14px 16px; flex-wrap: wrap; gap: 8px; }
@@ -523,7 +523,7 @@
   }
   @media (max-width: 420px) {
     .stats-row { grid-template-columns: 1fr; }
-    .panel > div[style*="grid-template-columns: repeat(4, 1fr)"] {
+    .plano-voo-grid {
       grid-template-columns: 1fr !important;
     }
     .hero-dash .big-title { font-size: 22px; }
@@ -615,7 +615,7 @@
 
     <div class="panel">
       <h3>Plano de Voo · Como usar este cockpit</h3>
-      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 12px">
+      <div class="plano-voo-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 12px">
         <div style="padding: 14px; background: #f3f7fc; border: 1px solid var(--line); border-radius: 6px">
           <div style="color: var(--cyan); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.15em; margin-bottom: 6px">PASSO 01</div>
           <p style="color: var(--text-dim); font-size: 14px; line-height: 1.5">Lê o módulo GMP1 + GMP2 em modo turbo: cada tópico tem resumo direto e key facts.</p>
