@@ -1,0 +1,2073 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GMP Cockpit | Estudo ANAC — Mecânico de Manutenção Aeronáutica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg-deep: #eaf1f9;
+    --bg-mid: #f3f7fc;
+    --bg-panel: #ffffff;
+    --bg-panel-2: #f7fafd;
+    --line: #cfdcec;
+    --line-soft: #dde7f2;
+    --cyan: #1e88c8;
+    --cyan-dim: #6cb8e0;
+    --amber: #d97706;
+    --amber-soft: #f59e0b;
+    --green: #16a34a;
+    --red: #dc2626;
+    --text: #1f2d3d;
+    --text-dim: #4a5d75;
+    --text-soft: #7a8ca3;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg-deep); color: var(--text); font-family: 'Rajdhani', sans-serif; overflow-x: hidden; }
+  body {
+    background:
+      radial-gradient(ellipse at top, #d6e6f4 0%, transparent 55%),
+      radial-gradient(ellipse at bottom right, #e7f1fb 0%, transparent 60%),
+      var(--bg-deep);
+    min-height: 100vh;
+    padding-bottom: 80px;
+  }
+  .grid-overlay {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      linear-gradient(rgba(30, 136, 200, 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(30, 136, 200, 0.06) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .container { max-width: 1280px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+  /* HEADER */
+  header.cockpit-header {
+    position: sticky; top: 0; z-index: 50;
+    background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(243,247,252,0.92) 100%);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 16px rgba(15, 30, 60, 0.05);
+  }
+  .header-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 0; gap: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-logo {
+    width: 42px; height: 42px; border-radius: 8px;
+    background: linear-gradient(135deg, #e3f2fd, #cce5f7);
+    border: 1px solid var(--cyan-dim);
+    display: grid; place-items: center;
+    box-shadow: 0 0 18px rgba(30, 136, 200, 0.18) inset;
+  }
+  .brand-logo svg { width: 26px; height: 26px; fill: var(--cyan); }
+  .brand-text h1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px; letter-spacing: 0.18em;
+    color: var(--cyan); text-transform: uppercase;
+  }
+  .brand-text p {
+    font-size: 12px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .status-led { display: flex; align-items: center; gap: 18px; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  .led {
+    display: flex; align-items: center; gap: 6px;
+    color: var(--text-dim); letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .led-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+  .led-dot.amber { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  /* NAV */
+  nav.module-nav {
+    display: flex; gap: 4px; padding: 12px 0; flex-wrap: wrap; border-top: 1px solid var(--line-soft);
+  }
+  nav.module-nav button {
+    background: transparent; border: 1px solid transparent; padding: 9px 16px;
+    color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer;
+    border-radius: 4px; transition: all 0.2s;
+  }
+  nav.module-nav button.active {
+    background: linear-gradient(180deg, rgba(30, 136, 200, 0.12), rgba(30, 136, 200, 0.04));
+    color: var(--cyan); border: 1px solid var(--cyan-dim);
+    box-shadow: 0 0 12px rgba(30, 136, 200, 0.18);
+  }
+  nav.module-nav button:hover { color: var(--cyan); background: rgba(30, 136, 200, 0.06); }
+  /* SECTIONS */
+  section.view { display: none; padding: 32px 0; }
+  section.view.active { display: block; animation: fadeIn 0.4s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  /* HERO DASHBOARD */
+  .hero-dash {
+    background: linear-gradient(135deg, #ffffff 0%, #f0f6fc 100%);
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 28px 32px; margin-bottom: 24px; position: relative; overflow: hidden;
+    box-shadow: 0 4px 14px rgba(15, 30, 60, 0.04);
+  }
+  .hero-dash::before {
+    content: ''; position: absolute; top: -50%; right: -10%;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(30, 136, 200, 0.1), transparent 60%);
+  }
+  .hero-dash h2 {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.25em;
+    color: var(--cyan); text-transform: uppercase; margin-bottom: 12px;
+  }
+  .hero-dash .big-title {
+    font-size: 38px; font-weight: 700; line-height: 1.05; margin-bottom: 14px;
+    background: linear-gradient(135deg, #1a3a5c, #1e88c8);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    position: relative;
+  }
+  .hero-dash p { color: var(--text-dim); max-width: 720px; line-height: 1.6; font-size: 15px; }
+  .stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--bg-panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px; position: relative; overflow: hidden;
+    box-shadow: 0 2px 8px rgba(15, 30, 60, 0.04);
+  }
+  .stat-card::after {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--cyan);
+  }
+  .stat-card.amber::after { background: var(--amber); }
+  .stat-card.green::after { background: var(--green); }
+  .stat-card .label {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em;
+    color: var(--text-soft); text-transform: uppercase; margin-bottom: 6px;
+  }
+  .stat-card .value {
+    font-size: 28px; font-weight: 700; color: var(--cyan); font-family: 'Rajdhani', sans-serif;
+  }
+  .stat-card.amber .value { color: var(--amber); }
+  .stat-card.green .value { color: var(--green); }
+  .stat-card .sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
+  /* GRID */
+  .panel-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; }
+  .panel {
+    background: var(--bg-panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px;
+    box-shadow: 0 2px 10px rgba(15, 30, 60, 0.04);
+  }
+  .panel h3 {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.22em;
+    color: var(--cyan); text-transform: uppercase; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel h3::before { content: '◆'; color: var(--amber); }
+  .chart-wrap { position: relative; height: 320px; }
+  /* MODULE TOPICS */
+  .topic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .topic-card {
+    background: var(--bg-panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 0; overflow: hidden; transition: border-color 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 8px rgba(15, 30, 60, 0.04);
+  }
+  .topic-card:hover { border-color: var(--cyan-dim); box-shadow: 0 4px 16px rgba(30, 136, 200, 0.08); }
+  .topic-head {
+    padding: 16px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+    background: linear-gradient(180deg, rgba(30, 136, 200, 0.05), transparent);
+    border-bottom: 1px solid transparent;
+  }
+  .topic-card.open .topic-head { border-bottom: 1px solid var(--line); }
+  .topic-head .title { font-size: 18px; font-weight: 600; color: #1a3a5c; flex: 1; }
+  .topic-head .meta {
+    display: flex; gap: 8px; align-items: center;
+  }
+  .pill {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em;
+    padding: 4px 9px; border-radius: 12px; text-transform: uppercase;
+  }
+  .pill.high { background: rgba(220, 38, 38, 0.1); color: var(--red); border: 1px solid rgba(220, 38, 38, 0.3); }
+  .pill.med { background: rgba(217, 119, 6, 0.1); color: var(--amber); border: 1px solid rgba(217, 119, 6, 0.3); }
+  .pill.low { background: rgba(30, 136, 200, 0.1); color: var(--cyan); border: 1px solid var(--cyan-dim); }
+  .pill.gmp1 { background: rgba(30, 136, 200, 0.1); color: var(--cyan); border: 1px solid var(--cyan-dim); }
+  .pill.gmp2 { background: rgba(217, 119, 6, 0.1); color: var(--amber); border: 1px solid rgba(217, 119, 6, 0.3); }
+  .topic-arrow { color: var(--text-dim); transition: transform 0.3s; }
+  .topic-card.open .topic-arrow { transform: rotate(180deg); }
+  .topic-body { display: none; padding: 18px 22px 22px; }
+  .topic-card.open .topic-body { display: block; }
+  .topic-body h4 {
+    color: var(--amber); font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    letter-spacing: 0.18em; text-transform: uppercase; margin: 16px 0 8px;
+  }
+  .topic-body h4:first-child { margin-top: 0; }
+  .topic-body p { color: var(--text-dim); line-height: 1.65; font-size: 15px; margin-bottom: 8px; }
+  .topic-body ul { list-style: none; padding: 0; }
+  .topic-body ul li {
+    padding: 6px 0 6px 22px; color: var(--text-dim); position: relative; line-height: 1.5; font-size: 14px;
+  }
+  .topic-body ul li::before {
+    content: '▸'; color: var(--cyan); position: absolute; left: 6px; top: 6px;
+  }
+  .topic-body .key-fact {
+    background: rgba(217, 119, 6, 0.06); border-left: 3px solid var(--amber);
+    padding: 12px 14px; margin: 10px 0; border-radius: 4px;
+    color: var(--text); font-size: 14px; line-height: 1.5;
+  }
+  .topic-body .key-fact strong { color: var(--amber); }
+  .checklist-block {
+    background: #f3f7fc; border: 1px solid var(--line);
+    border-radius: 6px; padding: 12px 16px; margin-top: 14px;
+  }
+  .checklist-block .check-item {
+    display: flex; align-items: center; gap: 10px; padding: 7px 0;
+    font-size: 14px; color: var(--text-dim); cursor: pointer; user-select: none;
+  }
+  .checklist-block .check-item input { accent-color: var(--cyan); cursor: pointer; }
+  .checklist-block .check-item.done { color: var(--text-soft); text-decoration: line-through; }
+  /* FILTER */
+  .filter-bar {
+    display: flex; gap: 10px; margin-bottom: 18px; align-items: center;
+    flex-wrap: wrap;
+  }
+  .filter-bar input[type="text"] {
+    flex: 1; min-width: 220px;
+    background: var(--bg-panel); border: 1px solid var(--line);
+    color: var(--text); padding: 10px 14px; border-radius: 6px;
+    font-family: 'Rajdhani', sans-serif; font-size: 15px;
+  }
+  .filter-bar input[type="text"]:focus { outline: 1px solid var(--cyan); }
+  .filter-chip {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.12em;
+    padding: 8px 14px; border-radius: 4px; cursor: pointer; text-transform: uppercase;
+    border: 1px solid var(--line); background: var(--bg-panel); color: var(--text-dim);
+  }
+  .filter-chip.active { color: var(--cyan); border-color: var(--cyan-dim); background: rgba(30, 136, 200, 0.1); }
+  /* SIMULADO */
+  .simulado-hero {
+    background: linear-gradient(135deg, #ffffff, #eaf3fb);
+    border: 1px solid var(--line); border-radius: 12px; padding: 28px;
+    display: grid; grid-template-columns: 1.2fr 1fr; gap: 28px;
+    align-items: center; margin-bottom: 24px;
+    box-shadow: 0 4px 14px rgba(15, 30, 60, 0.05);
+  }
+  .simulado-hero h2 { font-size: 30px; margin-bottom: 8px; color: #1a3a5c; }
+  .simulado-hero p { color: var(--text-dim); margin-bottom: 14px; line-height: 1.6; }
+  .timer-box {
+    background: #f0f7fc; border: 1px solid var(--cyan-dim); border-radius: 10px;
+    padding: 18px; text-align: center; box-shadow: 0 0 20px rgba(30, 136, 200, 0.1) inset;
+  }
+  .timer-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.25em;
+    color: var(--cyan); text-transform: uppercase; margin-bottom: 6px;
+  }
+  .timer-value {
+    font-family: 'JetBrains Mono', monospace; font-size: 42px;
+    color: var(--cyan); letter-spacing: 0.06em; font-weight: 700;
+  }
+  .timer-status {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.12em;
+    margin-top: 6px; color: var(--text-dim); text-transform: uppercase;
+  }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn {
+    background: var(--cyan); color: #ffffff; border: none; padding: 11px 22px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.16em;
+    text-transform: uppercase; font-weight: 700; border-radius: 4px; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn:hover { background: #1670a8; box-shadow: 0 4px 14px rgba(30, 136, 200, 0.3); }
+  .btn.amber { background: var(--amber); color: #ffffff; }
+  .btn.amber:hover { background: #b45f04; }
+  .btn.outline {
+    background: transparent; color: var(--cyan); border: 1px solid var(--cyan-dim);
+  }
+  .btn.outline:hover { background: rgba(30, 136, 200, 0.08); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .question-card {
+    background: var(--bg-panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 20px 22px; margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(15, 30, 60, 0.04);
+  }
+  .question-card .q-num {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.18em;
+    color: var(--cyan); text-transform: uppercase; margin-bottom: 8px;
+  }
+  .question-card .q-text { font-size: 16px; color: #1a3a5c; line-height: 1.5; margin-bottom: 14px; font-weight: 500; }
+  .options { display: flex; flex-direction: column; gap: 8px; }
+  .option {
+    background: #f7fafd; border: 1px solid var(--line); border-radius: 6px;
+    padding: 10px 14px; cursor: pointer; display: flex; align-items: center; gap: 12px;
+    transition: all 0.15s; font-size: 14px; color: var(--text);
+  }
+  .option:hover { border-color: var(--cyan-dim); background: rgba(30, 136, 200, 0.06); }
+  .option .opt-letter {
+    width: 26px; height: 26px; border-radius: 4px; background: #ffffff;
+    border: 1px solid var(--line); display: grid; place-items: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim);
+    flex-shrink: 0;
+  }
+  .option.selected { border-color: var(--cyan); background: rgba(30, 136, 200, 0.1); }
+  .option.selected .opt-letter { background: var(--cyan); color: #ffffff; border-color: var(--cyan); }
+  .option.correct { border-color: var(--green); background: rgba(22, 163, 74, 0.1); }
+  .option.correct .opt-letter { background: var(--green); color: #ffffff; border-color: var(--green); }
+  .option.wrong { border-color: var(--red); background: rgba(220, 38, 38, 0.08); }
+  .option.wrong .opt-letter { background: var(--red); color: #ffffff; border-color: var(--red); }
+  .explanation {
+    margin-top: 14px; padding: 12px 14px; background: rgba(30, 136, 200, 0.06);
+    border-left: 3px solid var(--cyan); border-radius: 4px; color: var(--text-dim);
+    font-size: 14px; line-height: 1.55; display: none;
+  }
+  .explanation.show { display: block; }
+  .explanation strong { color: var(--cyan); }
+  /* RESULT */
+  .result-screen {
+    background: var(--bg-panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 32px; text-align: center; display: none;
+    box-shadow: 0 4px 14px rgba(15, 30, 60, 0.06);
+  }
+  .result-screen.show { display: block; }
+  .result-screen h2 {
+    font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.25em;
+    color: var(--cyan); text-transform: uppercase; margin-bottom: 12px;
+  }
+  .result-score {
+    font-size: 86px; font-weight: 800; color: var(--cyan); margin: 8px 0;
+    font-family: 'Rajdhani', sans-serif;
+  }
+  .result-score.fail { color: var(--red); }
+  .result-score.pass { color: var(--green); }
+  .result-msg { font-size: 18px; color: var(--text-dim); margin-bottom: 18px; }
+  .result-breakdown {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;
+    margin-top: 24px;
+  }
+  .result-breakdown .box {
+    background: #f3f7fc; border: 1px solid var(--line); padding: 16px; border-radius: 8px;
+  }
+  .result-breakdown .box .num { font-size: 32px; font-weight: 700; }
+  .result-breakdown .box .num.green { color: var(--green); }
+  .result-breakdown .box .num.red { color: var(--red); }
+  .result-breakdown .box .lbl {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.2em;
+    color: var(--text-dim); text-transform: uppercase; margin-top: 4px;
+  }
+  /* FLASHCARDS */
+  .flash-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .flashcard {
+    background: var(--bg-panel); border: 1px solid var(--line); border-radius: 10px;
+    height: 200px; perspective: 1000px; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(15, 30, 60, 0.04);
+  }
+  .flash-inner {
+    position: relative; width: 100%; height: 100%; transform-style: preserve-3d;
+    transition: transform 0.5s;
+  }
+  .flashcard.flipped .flash-inner { transform: rotateY(180deg); }
+  .flash-face {
+    position: absolute; inset: 0; backface-visibility: hidden;
+    padding: 18px; display: flex; flex-direction: column; justify-content: center;
+    border-radius: 10px;
+  }
+  .flash-front { background: var(--bg-panel); }
+  .flash-front .topic-tag {
+    position: absolute; top: 12px; left: 12px;
+    font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.15em;
+    color: var(--cyan); text-transform: uppercase;
+  }
+  .flash-front .question {
+    font-size: 17px; color: #1a3a5c; font-weight: 600; line-height: 1.3; text-align: center;
+    margin-top: 12px;
+  }
+  .flash-front .hint {
+    position: absolute; bottom: 12px; left: 0; right: 0; text-align: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.15em;
+    color: var(--text-soft); text-transform: uppercase;
+  }
+  .flash-back {
+    background: linear-gradient(135deg, #1e88c8, #1a6ea3);
+    transform: rotateY(180deg); color: #ffffff; font-size: 14px; line-height: 1.5;
+    border: 1px solid var(--cyan-dim);
+  }
+  /* GLOSSARY */
+  .glossary-list {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  .glossary-item {
+    background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 18px;
+    box-shadow: 0 1px 4px rgba(15, 30, 60, 0.03);
+  }
+  .glossary-item .term {
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--cyan);
+    letter-spacing: 0.08em; font-weight: 700; margin-bottom: 4px;
+  }
+  .glossary-item .def { color: var(--text-dim); font-size: 14px; line-height: 1.5; }
+  /* FOOTER */
+  footer {
+    border-top: 1px solid var(--line); padding: 20px 0; margin-top: 40px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em;
+    color: var(--text-soft); text-transform: uppercase; text-align: center;
+  }
+  .progress-bar {
+    width: 100%; height: 6px; background: var(--line-soft); border-radius: 3px; overflow: hidden;
+    margin-top: 8px;
+  }
+  .progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--cyan), var(--amber));
+    transition: width 0.4s ease;
+  }
+  /* TIPS BOX */
+  .tip-strip {
+    background: linear-gradient(90deg, rgba(217, 119, 6, 0.08), rgba(30, 136, 200, 0.05));
+    border: 1px dashed rgba(217, 119, 6, 0.35);
+    padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; font-size: 14px;
+    color: var(--text); display: flex; gap: 12px; align-items: flex-start;
+  }
+  .tip-strip strong { color: var(--amber); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.18em; }
+  /* RESPONSIVE */
+  @media (max-width: 980px) {
+    .panel-grid, .topic-grid, .simulado-hero, .glossary-list, .result-breakdown { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .flash-grid { grid-template-columns: repeat(2, 1fr); }
+    .hero-dash .big-title { font-size: 28px; }
+  }
+  @media (max-width: 600px) {
+    .stats-row { grid-template-columns: 1fr; }
+    .flash-grid { grid-template-columns: 1fr; }
+    .header-inner { flex-direction: column; align-items: flex-start; }
+    nav.module-nav button { padding: 8px 12px; font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="grid-overlay"></div>
+
+<header class="cockpit-header">
+  <div class="container header-inner">
+    <div class="brand">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5C13 2.67 12.33 2 11.5 2S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+      </div>
+      <div class="brand-text">
+        <h1>GMP Cockpit</h1>
+        <p>ANAC · Mecânico de Manutenção Aeronáutica</p>
+      </div>
+    </div>
+    <div class="status-led">
+      <div class="led"><span class="led-dot"></span><span>Sistema OK</span></div>
+      <div class="led"><span class="led-dot amber"></span><span id="dateClock">07.05.2026</span></div>
+    </div>
+  </div>
+  <div class="container">
+    <nav class="module-nav" id="moduleNav">
+      <button data-view="dashboard" class="active">▸ Dashboard</button>
+      <button data-view="gmp1">▸ GMP 1 — Pistão</button>
+      <button data-view="gmp2">▸ GMP 2 — Turbina</button>
+      <button data-view="simulado">▸ Simulado ANAC</button>
+      <button data-view="flashcards">▸ Flashcards</button>
+      <button data-view="glossario">▸ Glossário</button>
+      <button data-view="checklist">▸ Checklist Final</button>
+    </nav>
+  </div>
+</header>
+
+<!-- ===================== DASHBOARD ===================== -->
+<section class="view active" id="view-dashboard">
+  <div class="container">
+    <div class="hero-dash">
+      <h2>▸ Briefing de Voo · Estudo Tático</h2>
+      <h1 class="big-title">Pronto para decolar na prova ANAC.</h1>
+      <p>Este cockpit consolida a apostila GMP-MMA em um sistema de estudo cirúrgico: 20 questões GMP1 + 20 GMP2 = 40 alvos, distribuídos pelos tópicos com maior incidência histórica. Ative o piloto automático: revisão estruturada, simulado cronometrado, flashcards de combate e checklists de pré-prova.</p>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="label">Questões na prova</div>
+        <div class="value">40</div>
+        <div class="sub">20 GMP1 + 20 GMP2</div>
+      </div>
+      <div class="stat-card amber">
+        <div class="label">Aproveitamento mín.</div>
+        <div class="value">70%</div>
+        <div class="sub">28 de 40 acertos</div>
+      </div>
+      <div class="stat-card green">
+        <div class="label">Banco de questões</div>
+        <div class="value" id="totalQuestions">120+</div>
+        <div class="sub">Estilo banca ANAC</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Tempo médio recomendado</div>
+        <div class="value">90<span style="font-size: 18px">min</span></div>
+        <div class="sub">≈ 2 min/questão</div>
+      </div>
+    </div>
+
+    <div class="panel-grid">
+      <div class="panel">
+        <h3>Mapa de Calor · Incidência por Tópico (estimativa baseada em provas anteriores)</h3>
+        <div class="chart-wrap"><canvas id="incidenceChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <h3>Distribuição GMP1 vs GMP2</h3>
+        <div class="chart-wrap"><canvas id="splitChart"></canvas></div>
+      </div>
+    </div>
+
+    <div style="height: 18px"></div>
+
+    <div class="panel">
+      <h3>Plano de Voo · Como usar este cockpit</h3>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 12px">
+        <div style="padding: 14px; background: #f3f7fc; border: 1px solid var(--line); border-radius: 6px">
+          <div style="color: var(--cyan); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.15em; margin-bottom: 6px">PASSO 01</div>
+          <p style="color: var(--text-dim); font-size: 14px; line-height: 1.5">Lê o módulo GMP1 + GMP2 em modo turbo: cada tópico tem resumo direto e key facts.</p>
+        </div>
+        <div style="padding: 14px; background: #f3f7fc; border: 1px solid var(--line); border-radius: 6px">
+          <div style="color: var(--cyan); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.15em; margin-bottom: 6px">PASSO 02</div>
+          <p style="color: var(--text-dim); font-size: 14px; line-height: 1.5">Roda os flashcards: memorização ativa dos termos que mais caem.</p>
+        </div>
+        <div style="padding: 14px; background: #f3f7fc; border: 1px solid var(--line); border-radius: 6px">
+          <div style="color: var(--cyan); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.15em; margin-bottom: 6px">PASSO 03</div>
+          <p style="color: var(--text-dim); font-size: 14px; line-height: 1.5">Faz o simulado cronometrado de 40 questões. Repete até bater 90%+.</p>
+        </div>
+        <div style="padding: 14px; background: #f3f7fc; border: 1px solid var(--line); border-radius: 6px">
+          <div style="color: var(--cyan); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.15em; margin-bottom: 6px">PASSO 04</div>
+          <p style="color: var(--text-dim); font-size: 14px; line-height: 1.5">Confere o checklist final na noite anterior. Decola pra prova confiante.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== GMP1 ===================== -->
+<section class="view" id="view-gmp1">
+  <div class="container">
+    <div class="tip-strip">
+      <strong>📌 GMP1</strong>
+      <div>Motores a pistão. Foco em ciclo Otto 4 tempos, sistemas de ignição (magnetos), lubrificação, hélices e carburação. Aproximadamente 50% da prova de motor convencional.</div>
+    </div>
+    <div id="gmp1-topics" class="topic-grid"></div>
+  </div>
+</section>
+
+<!-- ===================== GMP2 ===================== -->
+<section class="view" id="view-gmp2">
+  <div class="container">
+    <div class="tip-strip">
+      <strong>📌 GMP2</strong>
+      <div>Motores a turbina (turbojato, turbofan, turboélice, turboeixo). Foco em compressores, câmara de combustão, turbinas, sistemas de óleo, partida e fire protection.</div>
+    </div>
+    <div id="gmp2-topics" class="topic-grid"></div>
+  </div>
+</section>
+
+<!-- ===================== SIMULADO ===================== -->
+<section class="view" id="view-simulado">
+  <div class="container">
+    <div class="simulado-hero">
+      <div>
+        <h2>Simulado · Banca ANAC</h2>
+        <p>40 questões no formato oficial: 20 GMP1 + 20 GMP2. Você precisa de 28 acertos (70%) pra aprovar. Cronômetro de 90 minutos rodando — o mesmo ritmo da prova real.</p>
+        <div class="btn-row">
+          <button class="btn" id="startSim">▸ Iniciar Simulado</button>
+          <button class="btn outline" id="resetSim">↻ Resetar</button>
+          <button class="btn amber" id="reviewMode">👁 Modo Revisão (sem timer)</button>
+        </div>
+      </div>
+      <div class="timer-box">
+        <div class="timer-label">⏱ Tempo Restante</div>
+        <div class="timer-value" id="timerDisplay">90:00</div>
+        <div class="timer-status" id="timerStatus">Aguardando início</div>
+      </div>
+    </div>
+
+    <div id="simContainer"></div>
+    <div class="result-screen" id="resultScreen">
+      <h2>▸ RESULTADO DA AVALIAÇÃO</h2>
+      <div class="result-score" id="finalScore">0%</div>
+      <div class="result-msg" id="finalMsg"></div>
+      <div class="result-breakdown">
+        <div class="box"><div class="num green" id="rightCount">0</div><div class="lbl">Acertos</div></div>
+        <div class="box"><div class="num red" id="wrongCount">0</div><div class="lbl">Erros</div></div>
+        <div class="box"><div class="num" id="blankCount">0</div><div class="lbl">Em branco</div></div>
+      </div>
+      <div style="margin-top: 24px"><button class="btn" id="reviewAnswers">▸ Revisar Respostas</button></div>
+    </div>
+
+    <div class="btn-row" id="submitRow" style="display: none; justify-content: center; margin-top: 24px">
+      <button class="btn amber" id="submitSim">✓ Finalizar e Corrigir</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FLASHCARDS ===================== -->
+<section class="view" id="view-flashcards">
+  <div class="container">
+    <div class="tip-strip">
+      <strong>🃏 Flashcards</strong>
+      <div>Clica no card pra virar. Memorização ativa dos termos que mais caem. Os 30 flashcards estão organizados por dificuldade e incidência.</div>
+    </div>
+    <div class="filter-bar">
+      <button class="filter-chip active" data-flashfilter="all">Todos</button>
+      <button class="filter-chip" data-flashfilter="gmp1">GMP1</button>
+      <button class="filter-chip" data-flashfilter="gmp2">GMP2</button>
+      <button class="filter-chip" data-flashfilter="high">Alta incidência</button>
+    </div>
+    <div class="flash-grid" id="flashGrid"></div>
+  </div>
+</section>
+
+<!-- ===================== GLOSSÁRIO ===================== -->
+<section class="view" id="view-glossario">
+  <div class="container">
+    <div class="filter-bar">
+      <input type="text" id="glossSearch" placeholder="🔍 Buscar termo (ex: magneto, turbofan, governador)..." />
+    </div>
+    <div class="glossary-list" id="glossaryList"></div>
+  </div>
+</section>
+
+<!-- ===================== CHECKLIST FINAL ===================== -->
+<section class="view" id="view-checklist">
+  <div class="container">
+    <div class="tip-strip">
+      <strong>✅ Pré-prova</strong>
+      <div>Checklist do que revisar nas últimas 24h. Marca cada item — o progresso fica salvo no navegador.</div>
+    </div>
+    <div class="panel-grid">
+      <div class="panel">
+        <h3>Memorização Crítica · 100% certeza disso</h3>
+        <div class="checklist-block" id="checkCritical"></div>
+      </div>
+      <div class="panel">
+        <h3>Pega-ratão Clássicos da ANAC</h3>
+        <div class="checklist-block" id="checkTraps"></div>
+      </div>
+    </div>
+    <div style="height: 18px"></div>
+    <div class="panel-grid">
+      <div class="panel">
+        <h3>Itens do Dia da Prova</h3>
+        <div class="checklist-block" id="checkExamDay"></div>
+      </div>
+      <div class="panel">
+        <h3>Fórmulas e Números pra decorar</h3>
+        <div class="checklist-block" id="checkFormulas"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">▸ GMP COCKPIT v1.0 · Estudo ANAC MMA · Dados consolidados da apostila GMP-MMA + provas históricas ANAC ◂</div>
+</footer>
+
+<script>
+/* ============================================================
+   DADOS · GMP1 (motores a pistão)
+============================================================ */
+const GMP1_TOPICS = [
+  {
+    title: "Teoria · Ciclo Otto 4 Tempos",
+    incidence: "high",
+    incidenceLabel: "Alta",
+    summary: "O motor convencional aeronáutico é, na maioria, ciclo Otto, 4 tempos, ignição por faísca. Cada cilindro queima a mistura ar/combustível uma vez a cada 2 voltas do virabrequim — ou seja, 720° pra completar os 4 tempos.",
+    keyFacts: [
+      "<strong>Ordem dos 4 tempos:</strong> Admissão → Compressão → Combustão (Potência) → Escape.",
+      "<strong>720° por ciclo completo</strong>: o virabrequim dá 2 voltas pra cada combustão de um cilindro.",
+      "<strong>PMS</strong> (Ponto Morto Superior) e <strong>PMI</strong> (Ponto Morto Inferior) são os extremos do pistão. Servem de referência pra timing de válvulas e ignição.",
+      "<strong>Ângulo de avanço:</strong> a faísca acontece ANTES do PMS pra dar tempo da chama se propagar."
+    ],
+    bullets: [
+      "Tempo de ADMISSÃO: pistão desce, válvula de admissão abre, mistura entra.",
+      "Tempo de COMPRESSÃO: ambas válvulas fechadas, pistão sobe, mistura comprime.",
+      "Tempo de POTÊNCIA: faísca da vela inflama a mistura, pistão é empurrado pra baixo.",
+      "Tempo de ESCAPE: válvula de escape abre, pistão sobe expulsando os gases queimados.",
+      "Cilindrada (deslocamento) = volume varrido pelo pistão entre PMS e PMI.",
+      "Razão de compressão = volume total / volume da câmara de combustão."
+    ],
+    checklist: [
+      "Sei desenhar/explicar os 4 tempos na ordem correta",
+      "Sei diferenciar PMS de PMI",
+      "Entendo por que a faísca é antecipada (timing)",
+      "Decoro: 720° = 1 ciclo completo de 4 tempos"
+    ]
+  },
+  {
+    title: "Configurações de Motor (Radial, em Linha, Oposto, V)",
+    incidence: "med",
+    incidenceLabel: "Média",
+    summary: "Os motores aeronáuticos a pistão se classificam pela disposição dos cilindros. O OPOSTO HORIZONTAL domina aviação geral; o RADIAL marcou o auge dos motores grandes antes da turbina.",
+    keyFacts: [
+      "<strong>Oposto horizontal (boxer):</strong> cilindros em pares opostos, eixo horizontal. Padrão Lycoming/Continental — Cessna 172, Piper, etc. Compacto e refrigerado a ar.",
+      "<strong>Radial:</strong> cilindros em estrela ao redor do virabrequim. Sempre número ÍMPAR de cilindros por banco (3, 5, 7, 9). Usado em DC-3, T-6, motores grandes.",
+      "<strong>Em linha:</strong> cilindros enfileirados. Comum em aviação militar antiga.",
+      "<strong>V:</strong> dois bancos de cilindros formando V. Ex: motor Rolls-Royce Merlin (Spitfire)."
+    ],
+    bullets: [
+      "Motor radial tem cilindro ÍMPAR pra ordem de ignição uniforme.",
+      "Oposto horizontal = melhor refrigeração a ar (área frontal larga).",
+      "Em linha = melhor aerodinâmica, pior refrigeração."
+    ],
+    checklist: [
+      "Sei reconhecer cada configuração visualmente",
+      "Decoro que radial = cilindros ÍMPAR",
+      "Identifico que oposto horizontal é o padrão da aviação geral atual"
+    ]
+  },
+  {
+    title: "Sistema de Ignição · Magnetos",
+    incidence: "high",
+    incidenceLabel: "Alta",
+    summary: "Diferente do automóvel, o avião NÃO usa bateria pra fazer a faísca. Usa MAGNETO — um gerador autocontido movido pelo próprio motor. Isso é segurança: motor parar de funcionar por bateria descarregada não pode acontecer no ar.",
+    keyFacts: [
+      "<strong>Toda aeronave tem 2 magnetos por motor</strong> (esquerdo e direito) — redundância. Cada cilindro tem 2 velas, uma pra cada magneto.",
+      "<strong>Magneto é INDEPENDENTE da bateria.</strong> Por isso a chave de ignição tem posições BOTH, LEFT, RIGHT, OFF — não START.",
+      "<strong>Cheque magnetos antes do voo (run-up):</strong> testa cada magneto isoladamente. Queda de RPM aceitável: típica até 175 RPM por magneto, diferença entre eles ≤ 50 RPM.",
+      "<strong>P-lead:</strong> fio que aterra o magneto quando a chave está OFF. P-lead solto = magneto SEMPRE ligado = perigo!"
+    ],
+    bullets: [
+      "Componentes do magneto: ímã rotativo, bobina primária e secundária, platinado, capacitor, distribuidor.",
+      "Faísca = corrente de baixa tensão é interrompida pelo platinado, gerando alta tensão na bobina secundária.",
+      "Vela aeronáutica usa rosca específica e blindagem contra interferência de rádio.",
+      "Avanço de ignição típico: 25° a 30° antes do PMS."
+    ],
+    checklist: [
+      "Sei explicar por que magneto é mais seguro que bateria",
+      "Sei o procedimento de cheque magnetos no run-up",
+      "Entendo: P-lead solto = magneto ligado mesmo com chave OFF",
+      "Sei: 2 magnetos + 2 velas por cilindro = redundância dupla"
+    ]
+  },
+  {
+    title: "Sistema de Combustível · Carburador e Injeção",
+    incidence: "high",
+    incidenceLabel: "Alta",
+    summary: "O combustível precisa ser misturado com ar na proporção certa antes de chegar ao cilindro. Dois sistemas dominam: carburador (mais simples, sujeito a gelo) ou injeção (mais preciso, sem gelo no venturi).",
+    keyFacts: [
+      "<strong>AVGAS 100LL</strong> é o combustível padrão. Cor AZUL. Octanagem 100. 'LL' = Low Lead (baixo chumbo).",
+      "<strong>Mistura ideal estequiométrica:</strong> ~15:1 ar/combustível em massa.",
+      "<strong>Mistura rica:</strong> mais combustível, motor mais frio, menos potência.",
+      "<strong>Mistura pobre:</strong> menos combustível, motor mais quente, risco de detonação.",
+      "<strong>Gelo no carburador (carburator icing):</strong> pode formar até com OAT positiva (até +20°C) por causa da queda de temperatura no venturi. Solução: aquecedor de carburador (carb heat).",
+      "<strong>Injeção eletrônica/mecânica:</strong> injeta combustível direto no coletor de admissão. Não tem venturi, então NÃO TEM gelo de carburador."
+    ],
+    bullets: [
+      "Manete de mistura (mixture) controla a relação ar/combustível.",
+      "Em altitude, ar fica mais rarefeito → mistura fica naturalmente mais rica → 'leanar' (empobrecer) é necessário.",
+      "Bomba de combustível elétrica = backup; mecânica = principal, movida pelo motor.",
+      "Filtro de combustível obrigatório antes da injeção/carburador.",
+      "Drenos (sumps) nos tanques: pra checar água e contaminantes na pré-voo."
+    ],
+    checklist: [
+      "Sei: AVGAS 100LL é AZUL e tem 100 octanas",
+      "Entendo gelo de carburador (até +20°C de OAT)",
+      "Sei usar carb heat e por quê",
+      "Sei diferenciar mistura rica de pobre"
+    ]
+  },
+  {
+    title: "Sistema de Lubrificação",
+    incidence: "high",
+    incidenceLabel: "Alta",
+    summary: "Óleo lubrifica, REFRIGERA, limpa e SELA o motor. Em motores aeronáuticos é tão crítico que a maioria usa sistema de cárter SECO ou ÚMIDO com pressurização.",
+    keyFacts: [
+      "<strong>Funções do óleo (decorar todas):</strong> Lubrificar, Refrigerar, Limpar, Selar (vedação dos anéis), Amortecer (impactos), Proteger contra corrosão.",
+      "<strong>Cárter úmido:</strong> óleo armazenado no fundo do motor. Mais simples. Aviação geral.",
+      "<strong>Cárter seco:</strong> tanque externo, óleo bombeado e retornado. Aviação acrobática (motor pode inverter sem perder lubrificação) e turbinas.",
+      "<strong>Filtro full-flow:</strong> todo óleo passa pelo filtro antes de ir aos mancais.",
+      "<strong>Detecção:</strong> chip detector (detector de cavacos magnético) e pressostato de baixa pressão de óleo.",
+      "<strong>Óleo aeronáutico:</strong> mineral puro pra amaciamento (break-in) — primeiras horas. Depois, ashless dispersant (AD) com aditivos."
+    ],
+    bullets: [
+      "Componentes principais: bomba de pressão, bomba de retorno (cárter seco), tanque, filtro, radiador, válvulas (alívio, bypass, termostática).",
+      "Pressão típica de óleo em voo: 30-60 PSI (varia por motor).",
+      "Temperatura mínima de óleo pra decolar: tipicamente 40°C — óleo frio é viscoso demais.",
+      "Consumo de óleo é normal e esperado em aeronáuticos a pistão (alguns ml por hora)."
+    ],
+    checklist: [
+      "Sei TODAS as funções do óleo (mín. 5 funções)",
+      "Diferencio cárter seco x cárter úmido",
+      "Conheço pressão e temperatura típicas",
+      "Sei o que é chip detector"
+    ]
+  },
+  {
+    title: "Sistema de Refrigeração",
+    incidence: "med",
+    incidenceLabel: "Média",
+    summary: "Quase todo motor aeronáutico a pistão é refrigerado a AR — não tem radiador de água. Aletas nos cilindros aumentam a área e o ar é canalizado por defletores (baffles).",
+    keyFacts: [
+      "<strong>Refrigeração a ar:</strong> 75% a 85% do calor é dissipado por convecção do ar nas aletas.",
+      "<strong>Cowl flaps:</strong> persianas regulam quanto ar passa pelo motor. Abertas em subida (motor quente), fechadas em cruzeiro/descida (preserva temperatura).",
+      "<strong>Defletores (baffles):</strong> direcionam o ar de cima pra baixo nos cilindros. Defletor furado ou solto = superaquecimento.",
+      "<strong>CHT</strong> (Cylinder Head Temperature) e <strong>EGT</strong> (Exhaust Gas Temperature) são os instrumentos de monitoramento — ambos críticos."
+    ],
+    bullets: [
+      "Choque térmico: descer com manete em IDLE com motor quente racha cilindros. Solução: descer com potência parcial.",
+      "Mistura pobre demais = CHT alta = perigo.",
+      "Refrigeração líquida em aeronaves a pistão é raríssima (Rotax 912 é exceção).",
+      "Motor pode pegar fogo se cowl flap travada fechada em subida prolongada."
+    ],
+    checklist: [
+      "Sei: refrigeração aeronáutica a pistão = AR (não água)",
+      "Sei o que é cowl flap e quando usar",
+      "Diferencio CHT de EGT",
+      "Entendo o conceito de choque térmico"
+    ]
+  },
+  {
+    title: "Sistema de Indução · Admissão e Escape",
+    incidence: "med",
+    incidenceLabel: "Média",
+    summary: "Sistema de indução leva ar pro motor. Pode ser aspirado (atmosférico) ou sobrealimentado (turbocompressor / supercharger). Escape é o caminho dos gases queimados pra fora — e pode ainda servir aquecedor de cabine.",
+    keyFacts: [
+      "<strong>Aspirado:</strong> motor 'puxa' ar atmosférico. Perde potência com altitude (menos ar).",
+      "<strong>Turbocompressor (turbocharger):</strong> turbina movida pelos gases de escape comprime o ar de admissão. Mantém potência em altitude.",
+      "<strong>Supercharger (compressor mecânico):</strong> compressor movido pelo motor (não pelos gases). Consome potência mas não tem lag.",
+      "<strong>Aquecimento de cabine</strong> em aeronaves leves vem do escapamento via trocador de calor — daí a importância da inspeção: vazamento = MONÓXIDO de carbono na cabine."
+    ],
+    bullets: [
+      "Filtro de ar de admissão é OBRIGATÓRIO (areia abrasiva = motor destruído).",
+      "Carb heat aquece o ar antes do venturi pra derreter gelo.",
+      "Coletor de escape pode ter silenciador, trocador de calor e turbocompressor em série.",
+      "Wastegate controla quanto gás de escape vai pro turbo."
+    ],
+    checklist: [
+      "Sei a diferença entre turbocharger e supercharger",
+      "Entendo: motor aspirado perde potência com altitude",
+      "Conheço o risco de CO no aquecedor de cabine",
+      "Sei o papel do filtro de ar"
+    ]
+  },
+  {
+    title: "Hélices · Tipos, Governador e Pitch",
+    incidence: "high",
+    incidenceLabel: "Alta",
+    summary: "A hélice converte potência do motor em tração. Existem hélices de passo fixo (mais simples) e passo variável (controla RPM independente da potência). O governador é o cérebro do passo variável.",
+    keyFacts: [
+      "<strong>Passo fixo:</strong> ângulo das pás é constante. Otimizado pra UMA condição de voo (cruzeiro OU subida).",
+      "<strong>Passo variável (constant-speed):</strong> ângulo muda conforme demanda. Permite escolher RPM independente da posição da manete.",
+      "<strong>Governador:</strong> regula pressão de óleo pro hub da hélice, mudando o passo. Mantém RPM constante.",
+      "<strong>Manete preta = manete:</strong> potência (mistura ar/combustível, pressão de admissão).",
+      "<strong>Manete azul = hélice:</strong> RPM (passo).",
+      "<strong>Manete vermelha = mistura:</strong> ar/combustível.",
+      "<strong>Embandeiramento (feathering):</strong> em motor parado, gira pás na direção do vento pra reduzir arrasto. Padrão em bimotores."
+    ],
+    bullets: [
+      "Eficiência da hélice depende do ângulo de ataque das pás × velocidade do vento.",
+      "Reverso: passo negativo, empurra ar pra frente. Usado em frenagem pós-pouso.",
+      "Hélice em alfa range (β-range) = passo controlado por manete.",
+      "Hélice em modo governor = governador controla.",
+      "Aeronave bimotor com 1 motor parado: embandeira a hélice do motor inoperante."
+    ],
+    checklist: [
+      "Sei diferenciar passo fixo de passo variável",
+      "Decoro as cores das manetes (preta-azul-vermelha)",
+      "Entendo o que é embandeiramento e quando usar",
+      "Sei o papel do governador"
+    ]
+  },
+  {
+    title: "Inspeção, Manutenção e Pesquisa de Panes",
+    incidence: "med",
+    incidenceLabel: "Média",
+    summary: "O mecânico não é só consertador — é detetive. Inspeções programadas (50h, 100h, anual), troubleshooting e diferentes tipos de overhaul fazem parte da rotina.",
+    keyFacts: [
+      "<strong>TBO (Time Between Overhauls):</strong> intervalo recomendado entre revisões gerais. Típico em motores aeronáuticos: 1.500–2.000h.",
+      "<strong>Inspeção diferencial de compressão:</strong> mede vazamento por anel/válvula. Padrão típico: aceitável até 60/80 PSI.",
+      "<strong>Análise espectrométrica de óleo (SOAP):</strong> identifica metais no óleo, prevê desgaste.",
+      "<strong>Boroscopia:</strong> inspeção visual interna sem desmontar — câmera flexível dentro do cilindro."
+    ],
+    bullets: [
+      "Pré-voo: drenagem dos tanques (água), checagem visual, óleo, hélice, controles.",
+      "Inspeção 100h e anual têm conteúdos similares — diferença é cíclica.",
+      "Documentação: tudo que foi feito vai pro logbook, com nome, RAB, RM e data.",
+      "Sintoma 'magneto cai mais que o aceitável no run-up' → cheque velas, cabos, timing.",
+      "Sintoma 'perda de potência' → cheque mistura, ignição, indução, compressão."
+    ],
+    checklist: [
+      "Sei o que é TBO e qual o típico",
+      "Conheço a inspeção diferencial de compressão",
+      "Sei o que é boroscopia",
+      "Entendo a obrigatoriedade do logbook"
+    ]
+  },
+  {
+    title: "Pesquisa de Panes · Sintoma vs Causa",
+    incidence: "med",
+    incidenceLabel: "Média",
+    summary: "Decora a tabela: cada sintoma tem causas prováveis priorizadas.",
+    keyFacts: [
+      "<strong>Motor não pega:</strong> sem combustível, sem faísca (magnetos), bateria fraca pro starter, mistura totalmente pobre/cortada.",
+      "<strong>Pega e morre:</strong> bomba de combustível desligada, bloqueio de ar (vapor lock), aquecedor de carburador.",
+      "<strong>Falha em 1 magneto no run-up:</strong> vela suja, cabo de vela rompido, magneto descalibrado.",
+      "<strong>Pressão de óleo baixa:</strong> nível baixo, válvula de alívio aberta, bomba desgastada, fuga interna."
+    ],
+    bullets: [
+      "Aumento de CHT: mistura pobre, cowl flap fechado, defletor solto.",
+      "Aumento de EGT: mistura pobre, falha de ignição, perda de combustível.",
+      "Vibração nova: hélice desbalanceada, motor mal ajustado, isolador de motor (mount) gasto.",
+      "Fumaça preta: mistura rica.",
+      "Fumaça azul: óleo queimando (anel ou guia de válvula gasto).",
+      "Fumaça branca: combustível queimando incompleto OU vapor de água."
+    ],
+    checklist: [
+      "Sei as causas comuns de motor não pegar",
+      "Decoro as 3 cores de fumaça e o que indicam",
+      "Entendo a relação CHT/EGT × mistura",
+      "Sei diferenciar pane elétrica de mecânica"
+    ]
+  }
+];
+
+/* ============================================================
+   DADOS · GMP2 (motores a turbina)
+============================================================ */
+const GMP2_TOPICS = [
+  {
+    title: "Teoria de Motores a Reação · Princípios",
+    incidence: "high",
+    incidenceLabel: "Alta",
+    summary: "Motor a reação funciona por terceira lei de Newton: ação e reação. Ar é admitido, comprimido, queimado, expandido e expulso violentamente — gerando empuxo. O ciclo termodinâmico é o de Brayton (não Otto).",
+    keyFacts: [
+      "<strong>Ciclo Brayton (4 fases):</strong> Admissão → Compressão → Combustão (pressão constante) → Expansão/Escape.",
+      "<strong>Diferença chave do ciclo Otto:</strong> no Brayton, a combustão é à pressão constante (volume aumenta); no Otto é à volume constante (pressão aumenta).",
+      "<strong>Empuxo (thrust):</strong> medido em libras-força (lbf) ou kgf. F = ṁ × ΔV (massa de ar × variação de velocidade).",
+      "<strong>4 seções principais:</strong> Admissão (Intake) → Compressor → Combustão → Turbina + Bocal de escape (Nozzle)."
+    ],
+    bullets: [
+      "Turbina extrai parte da energia dos gases pra mover o compressor.",
+      "Restante da energia vira empuxo (turbojato) ou move um eixo (turboeixo, turbofan, turboélice).",
+      "EPR (Engine Pressure Ratio) e N1/N2 são os principais indicadores de potência.",
+      "Lei de Newton aplicada: jato é empurrado pra frente porque expulsa massa pra trás."
+    ],
+    checklist: [
+      "Sei: turbina = ciclo Brayton (não Otto)",
+      "Decoro as 4 seções do motor a turbina",
+      "Sei a fórmula do empuxo (F = ṁ × ΔV)",
+      "Entendo a 3ª lei de Newton aplicada"
+    ]
+  },
+  {
+    title: "Tipos de Motor · Turbojato, Turbofan, Turboélice, Turboeixo",
+    incidence: "high",
+    incidenceLabel: "Alta",
+    summary: "Os 4 tipos de motor a turbina diferem em como aproveitam a energia da turbina. CADA UM TEM SUA APLICAÇÃO — decorar é mandatório.",
+    keyFacts: [
+      "<strong>Turbojato (turbojet):</strong> empuxo 100% pelo bocal de escape. Caça militar antigo (MiG-15, F-86). Alto consumo, alto barulho. <strong>SEM</strong> bypass.",
+      "<strong>Turbofan:</strong> tem ventoinha (fan) frontal grande. Parte do ar pula a câmara de combustão (bypass). Mais eficiente em subsônico. <strong>É O PADRÃO</strong> da aviação comercial moderna (737, A320).",
+      "<strong>Turboélice (turboprop):</strong> turbina move uma hélice via redutor. Eficiente em baixa velocidade. King Air, ATR.",
+      "<strong>Turboeixo (turboshaft):</strong> turbina move um eixo de saída. Helicópteros. Não tem hélice nem bocal de empuxo significativo."
+    ],
+    bullets: [
+      "Razão de bypass (bypass ratio): turbofan moderno = 9:1 a 12:1.",
+      "Turbofan high-bypass = subsônico eficiente. Low-bypass = supersônico (caças F-16, etc.).",
+      "Turboélice é mais eficiente que turbofan em velocidades < 450 km/h.",
+      "Turboeixo no helicóptero precisa de free-turbine (turbina de potência separada) pra manter rotor em RPM constante."
+    ],
+    checklist: [
+      "Sei reconhecer os 4 tipos visualmente",
+      "Sei: avião comercial moderno = turbofan",
+      "Sei: helicóptero = turboeixo",
+      "Decoro: ATR/King Air = turboélice"
+    ]
+  },
+  {
+    title: "Compressor · Centrífugo e Axial",
+    incidence: "high",
+    incidenceLabel: "Alta",
+    summary: "Compressor sobe a pressão do ar antes da combustão. 2 tipos principais: centrífugo (jogá-lo radialmente) e axial (em estágios).",
+    keyFacts: [
+      "<strong>Centrífugo:</strong> impelidor joga ar radialmente. Robusto, simples, alta pressão por estágio. APUs, motores pequenos, helicópteros leves.",
+      "<strong>Axial:</strong> múltiplos estágios de rotor + estator. Cada estágio sobe pouco a pressão, mas dá pra empilhar muitos. <strong>É O PADRÃO</strong> em motores grandes.",
+      "<strong>Razão de compressão</strong> em turbofan moderno: 30:1 a 40:1.",
+      "<strong>Surge / Compressor Stall:</strong> falha onde o fluxo reverte. Causado por ângulo de ataque alto demais nas pás do compressor (entrada irregular, manobra brusca, falha de IGV).",
+      "<strong>IGV</strong> (Inlet Guide Vanes) e <strong>VSV</strong> (Variable Stator Vanes) ajustam o ângulo do estator pra evitar stall."
+    ],
+    bullets: [
+      "Estator transforma velocidade em pressão (difusor). Rotor adiciona energia ao ar.",
+      "Sangria (bleed air) extrai ar do compressor pra anti-ice, pressurização, partida do outro motor.",
+      "N1 = velocidade do compressor de baixa (LP). N2 = compressor de alta (HP).",
+      "Em motor 2-spool, N1 e N2 giram independentes em eixos concêntricos."
+    ],
+    checklist: [
+      "Sei diferenciar centrífugo de axial",
+      "Decoro razão de compressão típica",
+      "Sei o que é compressor stall e como evitar",
+      "Conheço bleed air e seus usos"
+    ]
+  },
+  {
+    title: "Câmara de Combustão",
+    incidence: "high",
+    incidenceLabel: "Alta",
+    summary: "É o coração do motor a turbina. Mistura ar comprimido + combustível atomizado, queima continuamente, e produz gases quentíssimos pra turbina.",
+    keyFacts: [
+      "<strong>3 tipos:</strong> Tubular (multicâmaras separadas, antigo) · Anular (uma câmara em anel, padrão moderno) · Tubo-anular ou cannular (mistura, ex: PT6).",
+      "<strong>Apenas ~25% do ar passa pela combustão direta</strong> (zona primária). Resto é ar de resfriamento e diluição.",
+      "<strong>Ignição:</strong> apenas pra PARTIDA. Depois, a chama se sustenta sozinha continuamente.",
+      "<strong>Igniter (vela):</strong> 2 igniters por motor, redundância. Vela de alta tensão (não comum, é capacitiva).",
+      "<strong>Razão ar/combustível na zona primária:</strong> ~15:1 (estequiométrica). Razão TOTAL no motor: 60:1 a 80:1 (graças ao ar de diluição)."
+    ],
+    bullets: [
+      "Combustível usado: Jet A, Jet A-1, Jet B, JP-5 (militar). Querosene aviação.",
+      "Atomizador (nozzle/spray): pulveriza combustível em gotículas pra queima eficiente.",
+      "Liner é a parede interna da câmara — recebe o calor direto. Tem orifícios pra refrigeração.",
+      "Hot section vs cold section: câmara + turbina = hot. Compressor = cold."
+    ],
+    checklist: [
+      "Decoro os 3 tipos de câmara",
+      "Sei: igniter só na partida",
+      "Conheço os combustíveis Jet (A, A-1, B)",
+      "Entendo a função do ar de diluição"
+    ]
+  },
+  {
+    title: "Turbina · Estágios e Refrigeração",
+    incidence: "high",
+    incidenceLabel: "Alta",
+    summary: "A turbina extrai energia dos gases quentes — parte vira movimento do compressor, parte vira empuxo/torque. Material e refrigeração são CRÍTICOS.",
+    keyFacts: [
+      "<strong>Estator (NGV - Nozzle Guide Vanes):</strong> direciona o gás para a turbina rotativa.",
+      "<strong>Rotor de turbina:</strong> pás que extraem energia. 1º estágio é o mais quente e estressado.",
+      "<strong>Pás de turbina</strong> são feitas de superligas a base de níquel (Inconel, Hastelloy). Têm canais internos pra ar de resfriamento (sangria do compressor).",
+      "<strong>Resfriamento por filme (film cooling):</strong> ar sai por orifícios na pá criando uma 'capa' protetora.",
+      "<strong>EGT (Exhaust Gas Temperature):</strong> instrumento crítico. Limites de partida (start), takeoff, cruzeiro. EGT alto demais = derrete pás."
+    ],
+    bullets: [
+      "Em motor 2-spool: turbina HP move compressor HP. Turbina LP move compressor LP + fan.",
+      "Free turbine (turbina livre): em turboeixo/turboélice, turbina de potência fica separada — não conectada ao compressor.",
+      "Falha de pá de turbina = catástrofe (FOD secundário).",
+      "Inspeção boroscópica nas pás é rotineira.",
+      "Material monocristalino (single crystal) nas pás de última geração."
+    ],
+    checklist: [
+      "Sei: 1ª etapa de turbina = mais quente",
+      "Conheço o resfriamento por filme",
+      "Sei: pás = superliga de níquel",
+      "Entendo o que é free turbine"
+    ]
+  },
+  {
+    title: "Sistema de Combustível em Turbina",
+    incidence: "med",
+    incidenceLabel: "Média",
+    summary: "Bem mais complexo que em pistão. Inclui bombas, FCU, atomizadores, controle eletrônico (FADEC nos modernos).",
+    keyFacts: [
+      "<strong>FCU (Fuel Control Unit):</strong> 'cérebro' hidromecânico que mede combustível conforme RPM, temperatura, pressão.",
+      "<strong>FADEC</strong> (Full Authority Digital Engine Control): substitui FCU em motores modernos. Computador controla 100% do combustível e parâmetros.",
+      "<strong>Combustível JET A-1:</strong> ponto de congelamento -47°C. Padrão internacional.",
+      "<strong>Heater de combustível:</strong> aquece pra evitar gelo no filtro em altitude.",
+      "<strong>Spray nozzles:</strong> atomizam combustível na câmara. Simplex ou duplex (2 estágios)."
+    ],
+    bullets: [
+      "Bomba de combustível tem múltiplos estágios: booster (baixa pressão) e main (alta pressão).",
+      "Filtro de combustível com bypass automático em caso de entupimento.",
+      "Hidromecânico mede em libras/hora ou kg/min.",
+      "Sistema também alimenta combustível pra refrigeração de óleo (cooler óleo-combustível)."
+    ],
+    checklist: [
+      "Sei a função do FCU",
+      "Diferencio FADEC de FCU",
+      "Decoro: Jet A-1 congela a -47°C",
+      "Conheço atomizadores simplex/duplex"
+    ]
+  },
+  {
+    title: "Lubrificação · Sistema de Óleo em Turbina",
+    incidence: "med",
+    incidenceLabel: "Média",
+    summary: "Turbina sempre usa cárter SECO. Óleo sintético específico (não mineral). Refrigera mancais, engrenagens e gerador.",
+    keyFacts: [
+      "<strong>Óleo turbina:</strong> tipo II (MIL-PRF-23699 ou MIL-L-7808). SINTÉTICO, base éster. Não mistura com mineral.",
+      "<strong>Sistema:</strong> tanque, bomba de pressão, filtro, mancais, bombas de retorno (scavenge), separador ar-óleo.",
+      "<strong>Chip detector:</strong> íman captura cavacos. Alguns motores têm 'chip detector com fuse' que isola pequenos detritos.",
+      "<strong>Indicação:</strong> pressão, temperatura, consumo, quantidade.",
+      "<strong>Consumo de óleo</strong> em turbina é baixíssimo (< 0,1 L/h). Consumo alto = pista de selos gastos."
+    ],
+    bullets: [
+      "Pressão típica: 40-60 PSI.",
+      "Temperatura: pode chegar a 130°C em mancais.",
+      "Cooler ar-óleo OU combustível-óleo (ambos comuns).",
+      "Não pode misturar marcas/tipos de óleo de turbina."
+    ],
+    checklist: [
+      "Sei: turbina usa cárter SECO sempre",
+      "Decoro: óleo sintético tipo II (éster)",
+      "Conheço chip detector",
+      "Entendo: consumo alto = problema"
+    ]
+  },
+  {
+    title: "Sistema de Partida · Pneumático e Elétrico",
+    incidence: "med",
+    incidenceLabel: "Média",
+    summary: "Motor a turbina precisa rodar a uns 15-20% N2 antes de injetar combustível e ligar igniters. Energia inicial vem de motor de partida.",
+    keyFacts: [
+      "<strong>Partida pneumática:</strong> ar comprimido roda turbina de partida acoplada à caixa de acessórios. Padrão em jatos comerciais. Ar vem do APU, GPU ou motor já rodando.",
+      "<strong>Partida elétrica:</strong> motor elétrico DC. Padrão em motores menores e helicópteros leves.",
+      "<strong>Sequência de partida:</strong> 1) starter rola motor → 2) atinge X% N2 → 3) abre fuel + igniters → 4) light-up → 5) acelera até idle → 6) starter desengata.",
+      "<strong>Hung start:</strong> motor não acelera além de baixo RPM. Causa comum: pouco ar do GPU.",
+      "<strong>Hot start:</strong> EGT excede limite na partida. Aborta IMEDIATAMENTE.",
+      "<strong>Wet start:</strong> combustível injetou mas não acendeu. Aborta, drena, espera, tenta de novo."
+    ],
+    bullets: [
+      "Igniters caem fora após partida — não ficam ligados.",
+      "Sequência cronometrada e geralmente automatizada por FADEC.",
+      "Falha do starter no ar (in-flight start): usa windmilling do ar relativo OU APU.",
+      "Em alguns motores, partida pode ser feita por cross-bleed (ar do motor já ligado)."
+    ],
+    checklist: [
+      "Sei a sequência de partida em turbina",
+      "Diferencio hung, hot e wet start",
+      "Conheço partida pneumática vs elétrica",
+      "Sei o que é cross-bleed"
+    ]
+  },
+  {
+    title: "Sistema de Ignição em Turbina",
+    incidence: "med",
+    incidenceLabel: "Média",
+    summary: "Diferente do pistão, ignição em turbina é só pra ACENDER a chama na partida. Depois disso, chama se mantém sozinha. Igniters são vela de alta energia (descarga capacitiva).",
+    keyFacts: [
+      "<strong>2 igniters por motor</strong> — redundância. Geralmente posicionados a ~120° na câmara.",
+      "<strong>Tipo:</strong> vela de descarga capacitiva, alta energia (1 a 20 joules), baixa frequência (~1 Hz).",
+      "<strong>Modos de operação:</strong> normal (na partida), ignição contínua (turbulência forte, gelo, chuva pesada — pra evitar flameout).",
+      "<strong>Flameout:</strong> chama apaga em voo. Recuperação: ignição contínua + reduzir altitude se necessário."
+    ],
+    bullets: [
+      "Energia é armazenada num capacitor e descarregada de uma vez.",
+      "Tensão pode passar de 25.000V.",
+      "Vela tem ponta cerâmica resistente a alta temperatura.",
+      "Inspeção do igniter: erosão, depósitos, gap."
+    ],
+    checklist: [
+      "Sei: ignição turbina = só na partida",
+      "Decoro: 2 igniters por motor",
+      "Sei o que é ignição contínua",
+      "Entendo o conceito de flameout"
+    ]
+  },
+  {
+    title: "Sistema de Proteção contra Fogo (Fire Protection)",
+    incidence: "high",
+    incidenceLabel: "Alta",
+    summary: "Detecção e supressão de fogo no motor são CRÍTICAS pra segurança. Costuma cair na prova com perguntas sobre tipos de detector e agente extintor.",
+    keyFacts: [
+      "<strong>Detectores tipo cabo (continuous loop):</strong> cabo Fenwal (fenwal switch) ou Kidde (resistive). Detecta calor ao longo de toda extensão.",
+      "<strong>Detectores pontuais:</strong> bimetal ou termistor em pontos específicos.",
+      "<strong>Agente extintor:</strong> historicamente Halon 1301. Atualmente, substitutos como HFC-125, FK-5-1-12 (Novec 1230).",
+      "<strong>Halon 1301:</strong> não condutor, não corrosivo, gás nobre. Mata a reação química do fogo.",
+      "<strong>2 garrafas de extinção</strong> normalmente: 1ª descarga + 2ª de reserva.",
+      "<strong>Procedimento padrão:</strong> Fire warning → corta combustível → corta sangria → desliga motor → dispara extintor."
+    ],
+    bullets: [
+      "Loop tipo Kidde mede resistência elétrica que cai com calor.",
+      "Loop tipo Fenwal usa eutético: a parte central derrete em calor extremo, fechando contato.",
+      "Teste: botão de TEST simula a condição de fogo, aciona alarme.",
+      "Drenos do nacele evitam acúmulo de combustível/óleo."
+    ],
+    checklist: [
+      "Sei: 2 tipos de loop (Kidde e Fenwal)",
+      "Decoro: Halon 1301 = agente clássico",
+      "Conheço o procedimento padrão de fire warning",
+      "Sei: 2 garrafas extintoras"
+    ]
+  },
+  {
+    title: "APU · Auxiliary Power Unit",
+    incidence: "med",
+    incidenceLabel: "Média",
+    summary: "Pequena turbina no cone de cauda da maioria dos jatos. Gera eletricidade e ar comprimido em solo (sem precisar de GPU) e backup em voo.",
+    keyFacts: [
+      "<strong>Função em solo:</strong> ar comprimido pra ar condicionado, partida dos motores, eletricidade pros sistemas.",
+      "<strong>Função em voo:</strong> backup elétrico e pneumático (em caso de falha de motor).",
+      "<strong>Tipo:</strong> turbina a gás, normalmente axial-centrífuga (Garrett/Honeywell GTCP series).",
+      "<strong>Limite altitude:</strong> a maioria dos APUs tem teto operacional definido (ex: 41.000 ft pra elétrica, 25.000 ft pra ar)."
+    ],
+    bullets: [
+      "Geralmente fica no cone da cauda do avião.",
+      "Tem seu próprio sistema de fire detection e extinção.",
+      "Partida do APU usa bateria.",
+      "Tem fuel pump e óleo próprios."
+    ],
+    checklist: [
+      "Sei o que é APU e onde fica",
+      "Decoro suas 2 funções (ar + eletricidade)",
+      "Entendo limite operacional em altitude",
+      "Sei: APU tem fire system próprio"
+    ]
+  },
+  {
+    title: "Reverso de Empuxo (Thrust Reverser)",
+    incidence: "low",
+    incidenceLabel: "Menor",
+    summary: "Sistema que redireciona empuxo pra frente, ajudando a frear no pouso. 2 tipos principais: cascade e bucket/clamshell.",
+    keyFacts: [
+      "<strong>Cascade reverser:</strong> grades na fuselagem direcionam ar do bypass pra frente. Padrão em turbofan moderno (737, A320).",
+      "<strong>Bucket / Clamshell:</strong> portas grandes obstruem o jato e direcionam pra frente. Mais antigo, usado em turbojet e algumas turboshaft.",
+      "<strong>Acionamento:</strong> hidráulico ou pneumático. Travas mecânicas e elétricas impedem ativação acidental em voo.",
+      "<strong>Use limit:</strong> só ativar com aeronave NO SOLO (squat switch confirma). Desligar normalmente abaixo de 60-80 kt pra evitar reingestão."
+    ],
+    bullets: [
+      "Spoilers e flaps trabalham em conjunto pro pouso.",
+      "Reverso costuma ser deployable só com manete em IDLE.",
+      "Falha de reverso aberto em voo é emergência grave.",
+      "Inspeções rigorosas das travas e atuadores."
+    ],
+    checklist: [
+      "Sei os 2 tipos: cascade e bucket",
+      "Decoro: ativação só com squat switch",
+      "Conheço o limite de velocidade típico",
+      "Entendo redução do uso em baixa velocidade"
+    ]
+  }
+];
+
+/* ============================================================
+   BANCO DE QUESTÕES (estilo ANAC)
+============================================================ */
+const QUESTIONS_GMP1 = [
+  {
+    q: "Em um motor aeronáutico convencional ciclo Otto de 4 tempos, quantos graus de rotação do virabrequim são necessários para completar UM ciclo completo em UM cilindro?",
+    options: ["180°", "360°", "540°", "720°"],
+    answer: 3,
+    explanation: "Um ciclo de 4 tempos exige DUAS voltas do virabrequim (admissão+compressão = 1 volta; combustão+escape = 1 volta), totalizando 720°."
+  },
+  {
+    q: "Qual é a configuração de motor a pistão mais comum em aeronaves de aviação geral atuais (Cessna 172, Piper PA-28)?",
+    options: ["Radial", "Em linha", "Oposto horizontal", "V invertido"],
+    answer: 2,
+    explanation: "O motor oposto horizontal (boxer) é o padrão da aviação geral leve, fabricado principalmente pela Lycoming e Continental."
+  },
+  {
+    q: "Por que motores radiais aeronáuticos sempre têm número ÍMPAR de cilindros por banco?",
+    options: ["Para reduzir vibração", "Para garantir ordem de ignição uniforme", "Por questão de fabricação", "Para diminuir peso"],
+    answer: 1,
+    explanation: "O número ímpar (3, 5, 7, 9) garante que a ignição ocorra em cilindros alternados, gerando ordem de explosão uniforme e funcionamento suave."
+  },
+  {
+    q: "Por que aeronaves a pistão usam MAGNETOS no sistema de ignição em vez de ignição dependente da bateria?",
+    options: ["Magnetos consomem menos energia", "Magnetos são totalmente independentes da bateria, garantindo faísca mesmo com pane elétrica", "Magnetos são mais leves", "Magnetos geram menos calor"],
+    answer: 1,
+    explanation: "Magnetos são geradores autocontidos movidos pelo próprio motor. Não dependem da bateria — segurança crítica em voo."
+  },
+  {
+    q: "Quantos magnetos e quantas velas existem em um motor aeronáutico convencional típico?",
+    options: ["1 magneto e 1 vela por cilindro", "2 magnetos e 2 velas por cilindro", "1 magneto e 2 velas por cilindro", "2 magnetos e 1 vela por cilindro"],
+    answer: 1,
+    explanation: "São 2 magnetos (esquerdo e direito) e 2 velas por cilindro — redundância dupla. Cada magneto alimenta uma das velas de cada cilindro."
+  },
+  {
+    q: "Durante o cheque de magnetos no run-up, é normal observar:",
+    options: ["Aumento de RPM ao isolar 1 magneto", "Pequena queda de RPM aceitável (até ~175 RPM por magneto típicamente) ao isolar 1 magneto", "Motor parar imediatamente", "Mudança de pressão de óleo"],
+    answer: 1,
+    explanation: "Ao testar 1 magneto isoladamente, o motor opera com apenas 1 vela por cilindro, causando combustão menos eficiente e pequena queda de RPM. Diferença grande entre os magnetos ou entre L/R indica problema."
+  },
+  {
+    q: "Qual a cor padrão da gasolina aeronáutica AVGAS 100LL?",
+    options: ["Verde", "Azul", "Amarela", "Vermelha"],
+    answer: 1,
+    explanation: "AVGAS 100LL é AZUL. 100 = octanagem, LL = Low Lead (baixo chumbo)."
+  },
+  {
+    q: "Sobre a formação de gelo no carburador, é CORRETO afirmar:",
+    options: ["Só ocorre com OAT abaixo de 0°C", "Pode ocorrer com OAT positiva (até cerca de +20°C) devido à queda de temperatura no venturi", "Ocorre apenas em climas tropicais", "Não afeta motores certificados"],
+    answer: 1,
+    explanation: "A queda de pressão no venturi do carburador resfria o ar; com umidade alta, o gelo pode formar mesmo com temperatura externa positiva. Por isso usamos carb heat."
+  },
+  {
+    q: "Em motores aeronáuticos a pistão, a refrigeração é predominantemente:",
+    options: ["Líquida (água/glicol)", "Por óleo", "A ar (forçada por defletores)", "Por hélio"],
+    answer: 2,
+    explanation: "A maioria absoluta dos motores aeronáuticos a pistão é refrigerada a AR. Aletas nos cilindros aumentam a área de troca; defletores (baffles) direcionam o fluxo de ar."
+  },
+  {
+    q: "São funções do óleo em um motor aeronáutico, EXCETO:",
+    options: ["Lubrificar peças móveis", "Refrigerar (transferir calor)", "Limpar (remover contaminantes)", "Gerar pressão de combustível"],
+    answer: 3,
+    explanation: "Óleo NÃO gera pressão de combustível (isso é função das bombas de combustível). Óleo lubrifica, refrigera, limpa, sela, amortece e protege contra corrosão."
+  },
+  {
+    q: "Em um motor de cárter úmido vs cárter seco, a principal diferença é:",
+    options: ["Tipo de óleo usado", "No cárter úmido, óleo fica armazenado no fundo do motor; no seco, em tanque externo separado", "Pressão de operação", "Cor do óleo"],
+    answer: 1,
+    explanation: "Cárter úmido: reservatório no fundo do motor (aviação geral típica). Cárter seco: tanque externo, óleo bombeado e retornado — usado em motores acrobáticos e em todos motores a turbina."
+  },
+  {
+    q: "Cowl flaps (persianas do capô) servem para:",
+    options: ["Reduzir arrasto em cruzeiro", "Regular o fluxo de ar de refrigeração no motor", "Aquecer a cabine", "Filtrar areia"],
+    answer: 1,
+    explanation: "Cowl flaps controlam quanto ar passa através do motor. Abertas = mais resfriamento (subida, motor quente). Fechadas = preserva temperatura (cruzeiro, descida)."
+  },
+  {
+    q: "Em uma hélice de passo variável (constant-speed), quem controla a mudança de passo?",
+    options: ["Manete de potência", "Governador, regulando pressão de óleo no hub", "Manete de mistura", "Piloto manualmente"],
+    answer: 1,
+    explanation: "O governador é o cérebro do sistema. Recebe a referência da manete azul (RPM desejado) e regula a pressão de óleo no hub da hélice pra ajustar o passo."
+  },
+  {
+    q: "A cor da manete que controla o RPM (passo da hélice) em aeronaves multi-engine é:",
+    options: ["Preta", "Azul", "Vermelha", "Verde"],
+    answer: 1,
+    explanation: "Padrão internacional: PRETA = potência (manete principal); AZUL = hélice (RPM); VERMELHA = mistura (ar/combustível)."
+  },
+  {
+    q: "Embandeiramento (feathering) da hélice consiste em:",
+    options: ["Travar a hélice em ângulo de máximo arrasto", "Posicionar as pás paralelas ao vento relativo, minimizando arrasto e parando rotação do motor inoperante", "Dobrar as pás", "Ajustar o RPM máximo"],
+    answer: 1,
+    explanation: "Embandeirar = posicionar as pás na direção do vento relativo (ângulo ~90° do plano de rotação). Minimiza arrasto e permite que motor parado em bimotor não vire moinho."
+  },
+  {
+    q: "Sobre TBO (Time Between Overhauls) em motores aeronáuticos a pistão:",
+    options: ["É medido apenas em ciclos", "É o intervalo recomendado pelo fabricante entre revisões gerais, tipicamente 1.500–2.000 horas", "É fixo em 1.000 horas para todos os motores", "Aplicável só a turbinas"],
+    answer: 1,
+    explanation: "TBO é a recomendação do fabricante de quantas horas o motor pode operar antes de revisão geral (overhaul). Varia por modelo: 1.500h a 2.000h é típico em aviação geral."
+  },
+  {
+    q: "A inspeção diferencial de compressão mede:",
+    options: ["Pressão máxima da combustão", "A retenção de pressão do cilindro, identificando vazamento por anéis ou válvulas", "RPM do motor", "Pressão de óleo"],
+    answer: 1,
+    explanation: "Aplica-se 80 PSI ao cilindro e mede-se a pressão retida. Padrão: 60/80 ou superior (≥75% de retenção). Vazamento indica anel desgastado, válvula vazando ou rachadura."
+  },
+  {
+    q: "Fumaça AZUL saindo do escapamento de um motor a pistão indica:",
+    options: ["Mistura rica demais", "Combustível incompleto", "Óleo queimando (anéis ou guias de válvula gastos)", "Falha de ignição"],
+    answer: 2,
+    explanation: "Fumaça azul = óleo entrando na câmara de combustão. Causa típica: anéis desgastados, guias/selos de válvula gastos. Fumaça preta = mistura rica. Fumaça branca = combustível ou vapor d'água."
+  },
+  {
+    q: "Sobre o P-lead (fio de aterramento) do magneto:",
+    options: ["Aterra a vela", "Quando intacto, aterra o magneto na posição OFF da chave; se rompido/solto, magneto fica SEMPRE ligado mesmo com chave em OFF", "Energiza o magneto", "Conecta os 2 magnetos"],
+    answer: 1,
+    explanation: "P-lead aterra o magneto pra desativá-lo. Se solto/quebrado: magneto continua gerando faísca mesmo com chave em OFF — perigo ao manusear hélice no solo!"
+  },
+  {
+    q: "Para evitar choque térmico em motores aeronáuticos a pistão, o procedimento correto na descida é:",
+    options: ["Reduzir abruptamente para IDLE", "Manter potência parcial, reduzindo gradualmente", "Aumentar a mistura", "Desligar ignição"],
+    answer: 1,
+    explanation: "Choque térmico = resfriamento brusco dos cilindros quando se reduz potência abruptamente. Pode rachar cilindros. Solução: descer com potência parcial, reduzindo gradualmente."
+  },
+  {
+    q: "O ângulo de avanço da ignição (ignição antes do PMS) existe porque:",
+    options: ["Aumenta o consumo", "A combustão não é instantânea: a faísca precisa ser dada ANTES do PMS para que a expansão máxima ocorra logo após o PMS", "Reduz pressão", "Resfria o motor"],
+    answer: 1,
+    explanation: "Combustão leva tempo. Se a faísca fosse no PMS, a pressão máxima ocorreria com pistão já descendo, perdendo eficiência. Avanço típico: 25°-30° antes do PMS."
+  },
+  {
+    q: "Em uma manobra de leaning (empobrecimento) de mistura, o piloto observa:",
+    options: ["EGT aumentando até um pico, depois caindo (ponto best power)", "EGT só caindo", "EGT só aumentando", "EGT constante"],
+    answer: 0,
+    explanation: "Conforme empobrece, EGT sobe até o 'best power' (pico) e depois cai (peak EGT, lean of peak). Operação típica: rich of peak ou peak EGT, dependendo do motor."
+  },
+  {
+    q: "Em motores turbocomprimidos, o componente que controla quanto gás de escape é desviado da turbina é:",
+    options: ["Carburador", "Wastegate", "Válvula de escape", "Vela"],
+    answer: 1,
+    explanation: "Wastegate é uma válvula que desvia parte dos gases de escape, controlando a pressão de admissão (manifold pressure) gerada pelo turbo."
+  },
+  {
+    q: "Risco do aquecedor de cabine via trocador de calor com escapamento:",
+    options: ["Excesso de barulho", "Vazamento pode introduzir MONÓXIDO DE CARBONO (CO) tóxico na cabine", "Aumento de consumo", "Perda de potência"],
+    answer: 1,
+    explanation: "Em pequenas aeronaves, o ar de aquecimento da cabine passa por trocador de calor envolvendo o escapamento. Trinca/furo = CO tóxico na cabine. Detectores de CO são fundamentais."
+  },
+  {
+    q: "Boroscopia em motor aeronáutico é:",
+    options: ["Inspeção visual interna sem desmontar, usando câmera flexível", "Análise química do óleo", "Teste de pressão", "Medição de temperatura"],
+    answer: 0,
+    explanation: "Boroscópio é uma câmera/lente flexível inserida pelos orifícios das velas ou inspeção. Permite ver pistão, válvulas, paredes do cilindro sem desmontar — economiza muito tempo."
+  }
+];
+
+const QUESTIONS_GMP2 = [
+  {
+    q: "O ciclo termodinâmico do motor a turbina aeronáutico é o:",
+    options: ["Ciclo Otto", "Ciclo Brayton", "Ciclo Diesel", "Ciclo Rankine"],
+    answer: 1,
+    explanation: "Motores a turbina (turbojato, turbofan, turboélice, turboeixo) operam no CICLO BRAYTON: admissão, compressão, combustão a pressão constante, expansão/escape. Otto é dos motores a pistão."
+  },
+  {
+    q: "Em um motor turbofan moderno, a 'razão de bypass' (bypass ratio) representa:",
+    options: ["Tamanho da fan", "Razão entre massa de ar que passa POR FORA do core e a massa que passa pelo core", "Velocidade do ar", "Pressão de saída"],
+    answer: 1,
+    explanation: "Bypass ratio = ar do bypass / ar do core. Turbofan moderno (high-bypass) tem ratios de 9:1 a 12:1, o que dá alta eficiência em subsônico."
+  },
+  {
+    q: "O motor padrão da aviação comercial moderna (B737, A320) é o:",
+    options: ["Turbojato", "Turbofan high-bypass", "Turboélice", "Turboeixo"],
+    answer: 1,
+    explanation: "Turbofan high-bypass é o padrão da aviação comercial moderna. Turbojato puro caiu em desuso em civil pelo alto consumo e barulho."
+  },
+  {
+    q: "Helicópteros usam predominantemente que tipo de motor a turbina?",
+    options: ["Turbojato", "Turbofan", "Turboeixo (turboshaft)", "Turboélice"],
+    answer: 2,
+    explanation: "Helicópteros usam TURBOEIXO: turbina move um eixo de potência conectado ao rotor principal via transmissão. Não há hélice nem empuxo direto significativo."
+  },
+  {
+    q: "Os 4 estágios do ciclo de funcionamento de um motor a turbina são:",
+    options: ["Admissão, ignição, expansão, escape", "Admissão, compressão, combustão (pressão constante), expansão/escape", "Compressão, ignição, escape, retorno", "Aspiração, partida, queima, descarga"],
+    answer: 1,
+    explanation: "Ciclo Brayton: ar admitido → comprimido pelo compressor → queima na câmara à pressão constante → expande e gera empuxo/torque pela turbina."
+  },
+  {
+    q: "O compressor AXIAL difere do CENTRÍFUGO porque:",
+    options: ["Centrífugo é mais moderno", "Axial tem múltiplos estágios em série, alcançando alta razão de compressão; centrífugo joga ar radialmente, com poucos estágios", "Centrífugo gera mais empuxo", "Axial usa óleo"],
+    answer: 1,
+    explanation: "Axial: vários estágios de rotor + estator empilhados, padrão dos motores grandes. Centrífugo: impelidor joga o ar radialmente, robusto e simples — usado em APUs, motores pequenos, helicópteros leves."
+  },
+  {
+    q: "Compressor stall (surge) é causado tipicamente por:",
+    options: ["Excesso de combustível", "Ângulo de ataque elevado nas pás do compressor (fluxo irregular, manobra brusca, falha de IGV)", "Falha do igniter", "Sobrecarga elétrica"],
+    answer: 1,
+    explanation: "Compressor stall ocorre quando o ângulo de ataque das pás do compressor fica elevado demais, causando descolamento de fluxo. Causas: ingestão irregular, manobra brusca, falha de IGV/VSV, distorção de entrada."
+  },
+  {
+    q: "Em motor a turbina 2-spool, N1 e N2 representam:",
+    options: ["Pressão e temperatura", "Velocidades dos eixos LP (baixa pressão) e HP (alta pressão), giratórios independentes em eixos concêntricos", "Combustível 1 e 2", "Tempo e idade"],
+    answer: 1,
+    explanation: "Em motores 2-spool, dois eixos concêntricos giram independente: N1 (LP - move fan e compressor LP via turbina LP) e N2 (HP - move compressor HP via turbina HP)."
+  },
+  {
+    q: "O tipo de câmara de combustão MAIS USADO em motores modernos é:",
+    options: ["Tubular (multicâmaras)", "Anular (uma câmara em anel ao redor do eixo)", "Cônica", "Radial"],
+    answer: 1,
+    explanation: "Câmara anular é o padrão moderno: única câmara em anel, mais leve, melhor distribuição de calor. Antigamente, tubular (várias câmaras separadas) era comum. PT6 usa cannular (intermediário)."
+  },
+  {
+    q: "Após a partida do motor a turbina, os IGNITERS:",
+    options: ["Continuam ligados o tempo todo", "São desativados; a chama se sustenta sozinha continuamente até flameout ou corte de combustível", "Funcionam só em altitude", "São acionados por temperatura"],
+    answer: 1,
+    explanation: "Ignição em turbina serve só pra ACENDER a chama na partida. Depois, a combustão contínua se mantém. Igniters só voltam a operar em ignição contínua (turbulência forte, chuva pesada, gelo, recovery de flameout)."
+  },
+  {
+    q: "Combustível padrão da aviação a turbina internacional é:",
+    options: ["Gasolina 100LL", "Diesel", "Jet A-1 (querosene aviação)", "GLP"],
+    answer: 2,
+    explanation: "Jet A e Jet A-1 são os padrões mundiais. Querosene refinado, alta capacidade calorífica, ponto de congelamento muito baixo (-40°C Jet A, -47°C Jet A-1)."
+  },
+  {
+    q: "FADEC (Full Authority Digital Engine Control) substitui o:",
+    options: ["Compressor", "FCU (Fuel Control Unit hidromecânico) - controlando 100% dos parâmetros do motor digitalmente", "Igniter", "Cooler de óleo"],
+    answer: 1,
+    explanation: "FADEC = computador digital que substitui o FCU hidromecânico. Controla combustível, ignição, sangria, EGT, surge protection, etc. Padrão em todos motores modernos."
+  },
+  {
+    q: "Sangria (bleed air) é:",
+    options: ["Ar que escapa do tanque de combustível", "Ar quente extraído do compressor para usos como anti-ice, pressurização, partida do outro motor", "Ar do escapamento", "Vácuo do motor"],
+    answer: 1,
+    explanation: "Bleed air = ar comprimido extraído de estágios do compressor. Usos: pressurização da cabine, anti-ice de asas/motor, partida cross-bleed, ar condicionado."
+  },
+  {
+    q: "Pás de turbina modernas são feitas de:",
+    options: ["Aço carbono comum", "Superligas a base de níquel (Inconel, Hastelloy), com canais internos para resfriamento", "Alumínio anodizado", "Titânio puro"],
+    answer: 1,
+    explanation: "Pás de turbina enfrentam temperaturas acima de 1.500°C. Por isso usam superligas de níquel (Inconel) e em últimas gerações, monocristal. Canais internos circulam ar de sangria pra refrigeração."
+  },
+  {
+    q: "Sistema de óleo de motor a turbina é SEMPRE:",
+    options: ["Cárter úmido", "Cárter seco, com tanque externo e bombas scavenge", "Sem óleo, refrigerado a ar", "Por circulação natural"],
+    answer: 1,
+    explanation: "Turbinas SEMPRE usam cárter seco. Tanque externo, bomba de pressão alimenta os mancais, bombas scavenge (de retorno) coletam o óleo dos mancais e devolvem ao tanque."
+  },
+  {
+    q: "Tipo de óleo usado em motor a turbina é:",
+    options: ["Óleo mineral comum", "Óleo sintético tipo II (base éster, MIL-PRF-23699)", "Óleo vegetal", "Óleo automotivo"],
+    answer: 1,
+    explanation: "Turbinas usam óleo SINTÉTICO específico, geralmente tipo II (MIL-PRF-23699 ou tipo I MIL-L-7808). Base éster, suporta temperaturas extremas. Não pode misturar marcas/tipos."
+  },
+  {
+    q: "Hung start em motor a turbina é:",
+    options: ["Partida muito rápida", "Motor não acelera além de baixa rotação durante a partida (causa comum: pouca pressão de ar do GPU)", "Excesso de combustível", "Falha de bateria"],
+    answer: 1,
+    explanation: "Hung start = motor acende mas estaciona em baixo RPM, não atinge idle. Causa comum: pouco ar do starter pneumático. Aborta e investiga."
+  },
+  {
+    q: "Hot start é caracterizado por:",
+    options: ["Motor frio", "EGT excedendo o limite máximo durante a partida — exige aborto IMEDIATO", "Excesso de RPM", "Falha de óleo"],
+    answer: 1,
+    explanation: "Hot start = EGT acima do limite. Pode danificar pás de turbina. Aborto imediato: corta combustível, mantém starter rolando pra resfriar."
+  },
+  {
+    q: "Em sistema de fire detection do motor, o LOOP tipo Kidde funciona por:",
+    options: ["Bimetal que dobra com calor", "Variação de RESISTÊNCIA elétrica do material com a temperatura", "Líquido que ferve", "Ondas sonoras"],
+    answer: 1,
+    explanation: "Kidde loop: cabo com material cuja resistência elétrica cai com calor. Sistema mede a resistência do cabo continuamente. Calor → resistência cai → alarme. Fenwal usa princípio diferente (eutético)."
+  },
+  {
+    q: "Agente extintor de fogo classicamente usado em motor aeronáutico é:",
+    options: ["Água", "Espuma", "Halon 1301 (e substitutos modernos como HFC-125 e Novec 1230)", "Areia"],
+    answer: 2,
+    explanation: "Halon 1301 foi o padrão por décadas: gás incolor, não condutor, não corrosivo, mata reação química do fogo. Sendo descontinuado por questões ambientais; substituído por HFC-125, FK-5-1-12 (Novec 1230)."
+  },
+  {
+    q: "APU (Auxiliary Power Unit) tem função PRIMÁRIA de:",
+    options: ["Empurrar a aeronave", "Gerar energia elétrica e ar comprimido em solo (e backup em voo)", "Filtrar combustível", "Pressurizar pneus"],
+    answer: 1,
+    explanation: "APU é uma pequena turbina (geralmente no cone da cauda). Em solo: ar pra ar condicionado, partida dos motores, eletricidade. Em voo: backup elétrico/pneumático."
+  },
+  {
+    q: "Em motor turbofan, EPR (Engine Pressure Ratio) representa:",
+    options: ["Pressão do óleo", "Razão entre pressão na saída da turbina LP e pressão de entrada do motor — usado como referência de empuxo", "Pressão de combustível", "Pressão da cabine"],
+    answer: 1,
+    explanation: "EPR = Pt7 / Pt2 (pressão saída turbina / pressão entrada motor). Indicador de empuxo em vários turbofans (especialmente Pratt & Whitney). Outros usam N1% como referência."
+  },
+  {
+    q: "Tipo de reverso de empuxo padrão em turbofan moderno é:",
+    options: ["Bucket / Clamshell", "Cascade (grades direcionando ar do bypass para frente)", "Spoiler", "Hidráulico interno"],
+    answer: 1,
+    explanation: "Cascade reverser usa grades (cascades) que direcionam o ar do BYPASS pra frente. É o tipo mais comum em turbofan moderno (737, A320). Bucket/clamshell é mais antigo, usado em turbojato e algumas turboshaft."
+  },
+  {
+    q: "Em motor a turbina, free turbine significa:",
+    options: ["Turbina sem custo", "Turbina de potência mecânicamente DESCONECTADA do compressor — usada em turboeixo e turboélice", "Turbina sem pás", "Turbina em manutenção"],
+    answer: 1,
+    explanation: "Free turbine = a turbina que move o eixo de saída (rotor de helicóptero, hélice) é independente da turbina que move o compressor. Permite RPMs diferentes — crítico em helicóptero (rotor sempre em RPM constante)."
+  },
+  {
+    q: "Em sistema de partida cross-bleed:",
+    options: ["Combustível é compartilhado", "Ar comprimido vem do motor já em funcionamento para dar partida no motor parado", "Bateria é compartilhada", "Não existe"],
+    answer: 1,
+    explanation: "Cross-bleed start: motor já operante fornece ar comprimido (sangria) pro starter pneumático do outro motor. Útil em remote, sem APU/GPU."
+  },
+  {
+    q: "EGT (Exhaust Gas Temperature) em motor a turbina é monitorada porque:",
+    options: ["É só estética", "EGT alta demais derrete pás de turbina; é o indicador mais crítico de saúde térmica do motor", "Indica nível de óleo", "Mostra pressão"],
+    answer: 1,
+    explanation: "EGT é a temperatura do gás na saída/entrada da turbina. Limites rigorosos pra start, takeoff, cruzeiro. Excesso = derrete pás (catastrófico). EGT é instrumento PRIMÁRIO de monitoramento térmico."
+  }
+];
+
+/* ============================================================
+   FLASHCARDS
+============================================================ */
+const FLASHCARDS = [
+  { topic: "GMP1", incidence: "high", q: "Quantos graus = 1 ciclo Otto completo em 1 cilindro?", a: "720° (duas voltas do virabrequim)" },
+  { topic: "GMP1", incidence: "high", q: "Cor da AVGAS 100LL?", a: "AZUL · 100 octanas · LL = Low Lead" },
+  { topic: "GMP1", incidence: "high", q: "Quantos magnetos por motor convencional?", a: "2 magnetos · 2 velas por cilindro · redundância dupla" },
+  { topic: "GMP1", incidence: "high", q: "Funções do óleo (mín 5)?", a: "Lubrificar · Refrigerar · Limpar · Selar · Amortecer · Proteger contra corrosão" },
+  { topic: "GMP1", incidence: "high", q: "Cor das manetes em multi-engine (3)?", a: "PRETA = potência · AZUL = hélice (RPM) · VERMELHA = mistura" },
+  { topic: "GMP1", incidence: "high", q: "Carburator icing pode ocorrer com quanto de OAT?", a: "Até cerca de +20°C — mesmo com OAT positiva! Solução: carb heat" },
+  { topic: "GMP1", incidence: "high", q: "Por que radial tem cilindros ÍMPAR?", a: "Para ordem de ignição uniforme (alternando entre cilindros)" },
+  { topic: "GMP1", incidence: "med", q: "Cárter seco vs úmido?", a: "Úmido: óleo no fundo do motor (aviação geral). Seco: tanque externo (acrobacia + todas turbinas)" },
+  { topic: "GMP1", incidence: "med", q: "Embandeiramento (feathering)?", a: "Posicionar pás paralelas ao vento relativo, minimizando arrasto em motor inoperante" },
+  { topic: "GMP1", incidence: "med", q: "Fumaça AZUL no escape indica?", a: "Óleo queimando · anéis ou guias de válvula gastas" },
+  { topic: "GMP1", incidence: "med", q: "Fumaça PRETA indica?", a: "Mistura RICA demais · combustão incompleta" },
+  { topic: "GMP1", incidence: "med", q: "TBO típico em motor a pistão?", a: "1.500 a 2.000 horas (varia por modelo)" },
+  { topic: "GMP1", incidence: "low", q: "Razão estequiométrica ar/combustível ideal?", a: "Aproximadamente 15:1 em massa" },
+  { topic: "GMP1", incidence: "low", q: "Avanço de ignição típico?", a: "25° a 30° antes do PMS" },
+  { topic: "GMP2", incidence: "high", q: "Ciclo termodinâmico do motor a turbina?", a: "Ciclo BRAYTON (combustão à pressão constante, diferente do Otto)" },
+  { topic: "GMP2", incidence: "high", q: "4 tipos de motor a turbina?", a: "Turbojato · Turbofan · Turboélice · Turboeixo" },
+  { topic: "GMP2", incidence: "high", q: "Padrão da aviação comercial moderna?", a: "Turbofan high-bypass (737, A320, etc.)" },
+  { topic: "GMP2", incidence: "high", q: "Helicóptero usa que motor?", a: "Turboeixo (turboshaft) · com free turbine" },
+  { topic: "GMP2", incidence: "high", q: "2 tipos de compressor?", a: "Centrífugo (radial, simples) · Axial (estágios, padrão de motores grandes)" },
+  { topic: "GMP2", incidence: "high", q: "Combustível Jet padrão internacional?", a: "Jet A-1 · congelamento -47°C · querosene" },
+  { topic: "GMP2", incidence: "high", q: "Câmara de combustão moderna mais comum?", a: "ANULAR (uma câmara em anel ao redor do eixo)" },
+  { topic: "GMP2", incidence: "high", q: "Ignição em turbina é ativa quando?", a: "SÓ NA PARTIDA · depois chama se sustenta sozinha (exceto modo contínuo)" },
+  { topic: "GMP2", incidence: "high", q: "2 tipos de loop de fire detection?", a: "Kidde (resistência elétrica) · Fenwal (eutético/bimetal)" },
+  { topic: "GMP2", incidence: "high", q: "Agente extintor clássico em motor?", a: "Halon 1301 · sendo substituído por HFC-125, Novec 1230" },
+  { topic: "GMP2", incidence: "med", q: "FADEC substitui o que?", a: "FCU (Fuel Control Unit hidromecânico) · controle digital total" },
+  { topic: "GMP2", incidence: "med", q: "N1 e N2 em motor 2-spool são?", a: "Velocidades dos eixos LP (baixa pressão) e HP (alta pressão), giratórios concêntricos independentes" },
+  { topic: "GMP2", incidence: "med", q: "Hot start em turbina?", a: "EGT excede limite na partida · ABORTAR imediatamente" },
+  { topic: "GMP2", incidence: "med", q: "Hung start em turbina?", a: "Motor não acelera além de baixa rotação na partida · causa comum: pouco ar do GPU" },
+  { topic: "GMP2", incidence: "med", q: "Pás de turbina · material?", a: "Superligas a base de NÍQUEL (Inconel, Hastelloy) · com canais internos pra resfriamento" },
+  { topic: "GMP2", incidence: "low", q: "Bypass ratio em turbofan high-bypass?", a: "9:1 a 12:1 (ar do bypass / ar do core)" }
+];
+
+/* ============================================================
+   GLOSSÁRIO
+============================================================ */
+const GLOSSARY = [
+  { term: "AVGAS 100LL", def: "Aviation Gasoline 100 Low Lead — combustível padrão de motores aeronáuticos a pistão. Cor azul, 100 octanas, baixo teor de chumbo." },
+  { term: "Magneto", def: "Gerador autocontido movido pelo motor que gera alta tensão pra faísca da vela, independente da bateria. Aeronave tem 2 por motor (redundância)." },
+  { term: "PMS / PMI", def: "Ponto Morto Superior / Inferior — extremos do percurso do pistão dentro do cilindro. Referência pra timing de válvulas e ignição." },
+  { term: "TBO", def: "Time Between Overhauls — intervalo recomendado pelo fabricante entre revisões gerais do motor. Típico: 1.500–2.000h em pistão." },
+  { term: "Cárter úmido / seco", def: "Úmido: óleo no fundo do motor (aviação geral comum). Seco: tanque externo, óleo bombeado e retornado (acrobacia + todas as turbinas)." },
+  { term: "Carburator Icing", def: "Formação de gelo no venturi do carburador devido à queda de temperatura. Pode ocorrer com OAT positiva (até +20°C). Solução: carb heat." },
+  { term: "Mixture (mistura)", def: "Relação ar/combustível. Ideal estequiométrica ~15:1. Rica = mais combustível, motor frio. Pobre = menos combustível, motor quente." },
+  { term: "Cowl Flaps", def: "Persianas no capô do motor que regulam o fluxo de ar de refrigeração. Abertas em subida, fechadas em cruzeiro/descida." },
+  { term: "EGT", def: "Exhaust Gas Temperature — temperatura dos gases de escape. Indicador térmico crítico, usado pra leaning em pistão e proteção em turbina." },
+  { term: "CHT", def: "Cylinder Head Temperature — temperatura da cabeça do cilindro. Crítico pra evitar detonação e dano térmico em motor a pistão." },
+  { term: "Constant-speed Propeller", def: "Hélice de passo variável que mantém RPM constante variando o ângulo das pás. Controlada por governador via pressão de óleo." },
+  { term: "Governador (Hélice)", def: "Mecanismo que regula a pressão de óleo no hub da hélice de passo variável, mantendo o RPM selecionado." },
+  { term: "Embandeiramento (Feathering)", def: "Posicionar pás da hélice paralelas ao vento relativo, eliminando arrasto. Usado em motor inoperante de bimotor." },
+  { term: "Brayton (Ciclo)", def: "Ciclo termodinâmico dos motores a turbina: admissão → compressão → combustão à pressão constante → expansão/escape." },
+  { term: "Turbojato", def: "Motor a reação puro. Empuxo 100% pelo bocal de escape. Sem bypass. Aplicação atual: caças supersônicos antigos. Caro e barulhento." },
+  { term: "Turbofan", def: "Motor com fan (ventoinha) frontal. Parte do ar passa pela camara, parte vai pelo bypass. Padrão da aviação comercial moderna. High-bypass = mais eficiente." },
+  { term: "Turboélice (Turboprop)", def: "Turbina move uma hélice via redutor. Eficiente em baixas/médias velocidades. Ex: ATR-72, King Air, Embraer EMB-110." },
+  { term: "Turboeixo (Turboshaft)", def: "Turbina move um eixo de saída. Padrão dos helicópteros. Usa free turbine pra rotação independente." },
+  { term: "Compressor Axial", def: "Compressor com múltiplos estágios de rotor + estator. Cada estágio sobe pouca pressão; conjunto chega a 30:1 ou mais. Padrão em motores grandes." },
+  { term: "Compressor Centrífugo", def: "Impelidor joga ar radialmente. Robusto, simples, alta razão por estágio. Usado em APUs, motores pequenos, helicópteros leves." },
+  { term: "Compressor Stall (Surge)", def: "Falha de fluxo no compressor: ar se desprende das pás, fluxo reverte. Causas: ângulo de ataque alto, IGV/VSV mal posicionado, ingestão irregular." },
+  { term: "IGV / VSV", def: "Inlet Guide Vanes / Variable Stator Vanes. Pás ajustáveis no compressor que mudam ângulo conforme RPM, prevenindo stall." },
+  { term: "N1 e N2", def: "Em motor 2-spool: velocidades de rotação dos eixos LP (compressor de baixa) e HP (compressor de alta), giratórios independentes." },
+  { term: "EPR", def: "Engine Pressure Ratio — Pt7/Pt2. Indicador de empuxo em alguns turbofans (Pratt & Whitney). Outros usam %N1." },
+  { term: "Câmara Anular", def: "Câmara de combustão em anel ao redor do eixo. Padrão moderno (mais leve, melhor distribuição). Antigamente: tubular (multicâmaras)." },
+  { term: "Igniter", def: "Vela de descarga capacitiva alta energia (1-20J), baixa frequência. 2 por motor a turbina. Só ativa na partida (e em modo contínuo)." },
+  { term: "Jet A / A-1", def: "Combustíveis padrão da aviação a turbina. Querosene refinado. Jet A-1 congela a -47°C, padrão internacional. Jet A: -40°C, EUA." },
+  { term: "FCU", def: "Fuel Control Unit — controle hidromecânico de combustível em motor a turbina. Mede vazão conforme RPM, pressão, temperatura." },
+  { term: "FADEC", def: "Full Authority Digital Engine Control — substitui FCU por computador digital. Controla 100% de combustível, ignição, sangria. Padrão moderno." },
+  { term: "Bleed Air", def: "Ar comprimido extraído de estágios do compressor. Usos: pressurização, anti-ice, partida cross-bleed, ar condicionado." },
+  { term: "Free Turbine", def: "Turbina de potência mecanicamente desconectada do compressor. Permite RPMs diferentes. Usada em turboeixo e turboélice." },
+  { term: "Hot Start", def: "Partida de turbina com EGT excedendo limite. Aborto imediato pra não derreter pás." },
+  { term: "Hung Start", def: "Partida de turbina que não acelera além de baixo RPM. Causa comum: pouca pressão de ar do starter pneumático." },
+  { term: "Wet Start", def: "Partida de turbina com combustível injetado mas sem ignição. Aborta, drena, espera 60s, tenta de novo." },
+  { term: "Cross-bleed Start", def: "Partida de motor a turbina usando ar de sangria do outro motor já em funcionamento." },
+  { term: "Halon 1301", def: "Agente extintor clássico de motor aeronáutico. Gás incolor, não-corrosivo. Sendo substituído por HFC-125, Novec 1230." },
+  { term: "Loop Kidde", def: "Detector de fogo tipo cabo: material com resistência elétrica que cai com calor. Sistema mede continuamente." },
+  { term: "Loop Fenwal", def: "Detector de fogo tipo cabo eutético: parte central derrete em calor, fechando contato e disparando alarme." },
+  { term: "APU", def: "Auxiliary Power Unit — turbina pequena (cone de cauda) que gera ar comprimido e energia em solo (e backup em voo). Tem fire system próprio." },
+  { term: "Reverso Cascade", def: "Tipo de thrust reverser com grades (cascades) que direcionam o ar do bypass pra frente. Padrão em turbofan moderno." },
+  { term: "Reverso Bucket / Clamshell", def: "Tipo de thrust reverser com portas grandes que obstruem o jato. Usado em turbojato e algumas aeronaves antigas." },
+  { term: "Boroscopia", def: "Inspeção visual interna do motor sem desmontar, usando câmera flexível. Permite ver pás de turbina, pistão, válvulas." },
+  { term: "SOAP", def: "Spectrometric Oil Analysis Program — análise espectrométrica do óleo pra identificar metais. Detecta desgaste antes da pane." },
+  { term: "Chip Detector", def: "Sensor magnético que captura cavacos metálicos no óleo. Indica desgaste interno (falha de mancal, engrenagem)." },
+  { term: "Wastegate", def: "Válvula que desvia parte dos gases de escape do turbocompressor, controlando a pressão de admissão (manifold pressure)." },
+  { term: "Defletores (Baffles)", def: "Anteparas que direcionam o ar de refrigeração pelos cilindros. Defletor solto = superaquecimento localizado." },
+  { term: "P-lead", def: "Fio de aterramento do magneto. Quando intacto, aterra magneto na posição OFF. Solto = magneto sempre ativo (perigo!)." },
+  { term: "FOD", def: "Foreign Object Damage — dano por objeto estranho ingerido no motor. Pode ser pedra, parafuso, ave. Catastrófico." }
+];
+
+/* ============================================================
+   CHECKLISTS
+============================================================ */
+const CHECKLIST_CRITICAL = [
+  "Decoro: 720° = 1 ciclo Otto completo de 4 tempos",
+  "Decoro: AVGAS 100LL = AZUL · 100 octanas",
+  "Decoro: 2 magnetos + 2 velas por cilindro",
+  "Decoro: Carb icing pode ocorrer com OAT até +20°C",
+  "Decoro: Pretas/Azul/Vermelha = Potência/Hélice/Mistura",
+  "Decoro: Funções do óleo (mín 5: lubrificar, refrigerar, limpar, selar, amortecer)",
+  "Decoro: Ciclo Brayton = turbina · combustão à pressão constante",
+  "Decoro: 4 tipos turbina = turbojato, turbofan, turboélice, turboeixo",
+  "Decoro: Avião comercial = turbofan high-bypass · helicóptero = turboeixo",
+  "Decoro: Compressor centrífugo (impelidor radial) vs axial (estágios)",
+  "Decoro: Câmara anular = padrão moderno",
+  "Decoro: Pás de turbina = superligas de níquel + canais de resfriamento",
+  "Decoro: Turbina = SEMPRE cárter seco · óleo sintético tipo II",
+  "Decoro: Igniter ativa SÓ na partida · 2 igniters por motor",
+  "Decoro: Halon 1301 = agente extintor clássico"
+];
+
+const CHECKLIST_TRAPS = [
+  "Magneto NÃO é alimentado pela bateria (pegadinha clássica)",
+  "P-lead solto = magneto SEMPRE ligado (mesmo com chave OFF)",
+  "Fumaça azul ≠ fumaça preta (azul = óleo · preta = mistura rica)",
+  "Refrigeração aeronáutica a pistão é A AR (não líquida — pegadinha)",
+  "Hot start em turbina = ABORTAR, não tentar continuar",
+  "Compressor stall NÃO é falha de combustível, é de fluxo de ar",
+  "Reverso de empuxo só ativa com squat switch (em solo) — não em voo",
+  "FADEC ≠ FCU (FADEC é digital, FCU é hidromecânico)",
+  "Free turbine ≠ turbina de potência fixa (free = independente do compressor)",
+  "Bypass ratio mede ar EXTERNO/CORE (não pressão)",
+  "Embandeiramento = ângulo paralelo ao vento (não perpendicular)",
+  "Choque térmico = descida com IDLE abrupto · perigoso",
+  "Magnetos têm queda DIFERENTE? Cabo, vela ou timing problemáticos",
+  "Cowl flap fechado em subida = superaquecimento (não fechar errado)"
+];
+
+const CHECKLIST_EXAM_DAY = [
+  "Documento de identidade com foto",
+  "Comprovante de inscrição da prova ANAC",
+  "Caneta esferográfica preta ou azul",
+  "Chegar com 1h de antecedência ao local",
+  "Dormir bem na noite anterior (mín. 7h)",
+  "Comer leve antes — evitar excessos",
+  "Roupa confortável e em camadas (sala pode estar fria)",
+  "Lanche e água (caso permitido — confirmar regulamento)",
+  "Revisar 30min antes os flashcards de alta incidência",
+  "Não estudar matéria nova no dia da prova",
+  "Respiração calma antes de começar — leitura cuidadosa do enunciado",
+  "Marcar respostas claras · cuidado com a transcrição pro gabarito"
+];
+
+const CHECKLIST_FORMULAS = [
+  "Ciclo Otto: 720° = 1 ciclo completo de 4 tempos em 1 cilindro",
+  "Razão de compressão = Volume total / Volume da câmara de combustão",
+  "Mistura estequiométrica: ~15:1 ar/combustível em massa",
+  "AVGAS 100LL: octanagem 100 · cor AZUL",
+  "TBO típico motor a pistão: 1.500–2.000 horas",
+  "Inspeção diferencial de compressão: mín ~60/80 PSI (75% de retenção)",
+  "Pressão de óleo típica em pistão: 30–60 PSI",
+  "Avanço de ignição: 25°–30° antes do PMS",
+  "Empuxo (Newton): F = ṁ × ΔV (massa × variação de velocidade)",
+  "Razão de compressão turbofan moderno: 30:1 a 40:1",
+  "Bypass ratio turbofan high-bypass: 9:1 a 12:1",
+  "Jet A-1: ponto de congelamento -47°C",
+  "Pressão de óleo turbina: 40–60 PSI",
+  "Razão ar/combustível na zona primária da câmara: ~15:1 (estequiométrica)",
+  "Razão TOTAL ar/combustível em turbina (incluindo ar de diluição): 60:1 a 80:1",
+  "Aproveitamento mínimo na prova ANAC: 70% (28 acertos em 40)"
+];
+
+/* ============================================================
+   RENDERIZAÇÃO · TÓPICOS
+============================================================ */
+function renderTopics(list, containerId, modulePrefix) {
+  const c = document.getElementById(containerId);
+  list.forEach((t, i) => {
+    const card = document.createElement('div');
+    card.className = 'topic-card';
+    const checklistHTML = t.checklist.map((item, idx) => {
+      const id = `${modulePrefix}-${i}-${idx}`;
+      return `<label class="check-item" data-id="${id}">
+        <input type="checkbox" data-checkid="${id}" />
+        <span>${item}</span>
+      </label>`;
+    }).join('');
+    const bulletsHTML = t.bullets ? `<h4>▸ Pontos Operacionais</h4><ul>${t.bullets.map(b => `<li>${b}</li>`).join('')}</ul>` : '';
+    const keyFactsHTML = t.keyFacts ? `<h4>▸ Key Facts (decora!)</h4>` + t.keyFacts.map(f => `<div class="key-fact">${f}</div>`).join('') : '';
+    card.innerHTML = `
+      <div class="topic-head">
+        <div class="title">${t.title}</div>
+        <div class="meta">
+          <span class="pill ${modulePrefix.toLowerCase()}">${modulePrefix.toUpperCase()}</span>
+          <span class="pill ${t.incidence}">${t.incidenceLabel}</span>
+          <span class="topic-arrow">▼</span>
+        </div>
+      </div>
+      <div class="topic-body">
+        <h4>▸ Resumo Estratégico</h4>
+        <p>${t.summary}</p>
+        ${keyFactsHTML}
+        ${bulletsHTML}
+        <h4>▸ Checklist de Domínio</h4>
+        <div class="checklist-block">${checklistHTML}</div>
+      </div>
+    `;
+    card.querySelector('.topic-head').addEventListener('click', () => card.classList.toggle('open'));
+    c.appendChild(card);
+  });
+}
+
+renderTopics(GMP1_TOPICS, 'gmp1-topics', 'gmp1');
+renderTopics(GMP2_TOPICS, 'gmp2-topics', 'gmp2');
+
+/* ============================================================
+   FLASHCARDS RENDER
+============================================================ */
+function renderFlashcards(filter = 'all') {
+  const grid = document.getElementById('flashGrid');
+  grid.innerHTML = '';
+  FLASHCARDS.forEach(fc => {
+    if (filter === 'gmp1' && fc.topic !== 'GMP1') return;
+    if (filter === 'gmp2' && fc.topic !== 'GMP2') return;
+    if (filter === 'high' && fc.incidence !== 'high') return;
+    const card = document.createElement('div');
+    card.className = 'flashcard';
+    card.innerHTML = `
+      <div class="flash-inner">
+        <div class="flash-face flash-front">
+          <div class="topic-tag">${fc.topic} · ${fc.incidence === 'high' ? '🔥 ALTA' : fc.incidence === 'med' ? 'MÉDIA' : 'baixa'}</div>
+          <div class="question">${fc.q}</div>
+          <div class="hint">▸ Clica pra ver a resposta</div>
+        </div>
+        <div class="flash-face flash-back">${fc.a}</div>
+      </div>
+    `;
+    card.addEventListener('click', () => card.classList.toggle('flipped'));
+    grid.appendChild(card);
+  });
+}
+renderFlashcards();
+document.querySelectorAll('[data-flashfilter]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-flashfilter]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderFlashcards(btn.dataset.flashfilter);
+  });
+});
+
+/* ============================================================
+   GLOSSÁRIO
+============================================================ */
+function renderGlossary(filter = '') {
+  const list = document.getElementById('glossaryList');
+  list.innerHTML = '';
+  const q = filter.toLowerCase();
+  GLOSSARY.filter(g => !q || g.term.toLowerCase().includes(q) || g.def.toLowerCase().includes(q))
+    .forEach(g => {
+      const div = document.createElement('div');
+      div.className = 'glossary-item';
+      div.innerHTML = `<div class="term">${g.term}</div><div class="def">${g.def}</div>`;
+      list.appendChild(div);
+    });
+}
+renderGlossary();
+document.getElementById('glossSearch').addEventListener('input', e => renderGlossary(e.target.value));
+
+/* ============================================================
+   CHECKLIST FINAL
+============================================================ */
+function renderChecklistBlock(items, containerId) {
+  const c = document.getElementById(containerId);
+  c.innerHTML = items.map((it, idx) => {
+    const id = `${containerId}-${idx}`;
+    return `<label class="check-item" data-id="${id}">
+      <input type="checkbox" data-checkid="${id}" />
+      <span>${it}</span>
+    </label>`;
+  }).join('');
+}
+renderChecklistBlock(CHECKLIST_CRITICAL, 'checkCritical');
+renderChecklistBlock(CHECKLIST_TRAPS, 'checkTraps');
+renderChecklistBlock(CHECKLIST_EXAM_DAY, 'checkExamDay');
+renderChecklistBlock(CHECKLIST_FORMULAS, 'checkFormulas');
+
+/* Persistência checkboxes localStorage */
+function saveCheck(id, checked) { localStorage.setItem('chk-' + id, checked ? '1' : '0'); }
+function loadChecks() {
+  document.querySelectorAll('input[data-checkid]').forEach(input => {
+    const id = input.dataset.checkid;
+    if (localStorage.getItem('chk-' + id) === '1') {
+      input.checked = true;
+      input.closest('.check-item').classList.add('done');
+    }
+    input.addEventListener('change', () => {
+      saveCheck(id, input.checked);
+      input.closest('.check-item').classList.toggle('done', input.checked);
+    });
+  });
+}
+loadChecks();
+
+/* ============================================================
+   NAVEGAÇÃO ENTRE VIEWS
+============================================================ */
+document.querySelectorAll('#moduleNav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#moduleNav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('section.view').forEach(s => s.classList.remove('active'));
+    document.getElementById('view-' + btn.dataset.view).classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+});
+
+/* ============================================================
+   GRÁFICOS · CHART.JS
+============================================================ */
+const incidenceData = {
+  labels: [
+    'Ignição/Magnetos', 'Combustível/Carburador', 'Lubrificação',
+    'Hélices/Governador', 'Ciclo Otto', 'Compressor (axial/centrífugo)',
+    'Câmara/Combustão', 'Tipos de Motor Turbina', 'Fire Protection',
+    'Sistema de Partida', 'Refrigeração', 'APU & Reverso'
+  ],
+  datasets: [{
+    label: '% Incidência estimada',
+    data: [14, 12, 10, 9, 8, 10, 9, 9, 7, 5, 4, 3],
+    backgroundColor: ['#1e88c8','#1e88c8','#1e88c8','#1e88c8','#1e88c8','#d97706','#d97706','#d97706','#d97706','#d97706','#1e88c8','#d97706'],
+    borderColor: '#ffffff', borderWidth: 1, borderRadius: 4
+  }]
+};
+
+new Chart(document.getElementById('incidenceChart'), {
+  type: 'bar',
+  data: incidenceData,
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { backgroundColor: '#1a3a5c', titleColor: '#ffffff', bodyColor: '#e3f2fd', borderColor: '#cfdcec', borderWidth: 1 }
+    },
+    scales: {
+      x: { ticks: { color: '#4a5d75', font: { size: 10 } }, grid: { color: 'rgba(207, 220, 236, 0.6)' } },
+      y: { beginAtZero: true, max: 16, ticks: { color: '#4a5d75', callback: v => v + '%' }, grid: { color: 'rgba(207, 220, 236, 0.6)' } }
+    }
+  }
+});
+
+new Chart(document.getElementById('splitChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['GMP1 · Pistão (50%)', 'GMP2 · Turbina (50%)'],
+    datasets: [{
+      data: [50, 50],
+      backgroundColor: ['#1e88c8', '#d97706'],
+      borderColor: '#ffffff', borderWidth: 4
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { color: '#1f2d3d', font: { family: 'Rajdhani', size: 13 }, padding: 16 }
+      }
+    },
+    cutout: '65%'
+  }
+});
+
+/* ============================================================
+   SIMULADO · LÓGICA
+============================================================ */
+const ALL_QUESTIONS = [];
+QUESTIONS_GMP1.forEach(q => ALL_QUESTIONS.push({ ...q, module: 'GMP1' }));
+QUESTIONS_GMP2.forEach(q => ALL_QUESTIONS.push({ ...q, module: 'GMP2' }));
+document.getElementById('totalQuestions').textContent = ALL_QUESTIONS.length;
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+let currentSimulado = [];
+let userAnswers = [];
+let timerInterval = null;
+let timeLeft = 90 * 60;
+let simStarted = false;
+let isReviewMode = false;
+
+function buildSimulado(reviewMode = false) {
+  isReviewMode = reviewMode;
+  // pega 20 GMP1 + 20 GMP2 (ou todas se < 20)
+  const g1 = shuffle(QUESTIONS_GMP1).slice(0, Math.min(20, QUESTIONS_GMP1.length));
+  const g2 = shuffle(QUESTIONS_GMP2).slice(0, Math.min(20, QUESTIONS_GMP2.length));
+  currentSimulado = [...g1.map(q => ({...q, module: 'GMP1'})), ...g2.map(q => ({...q, module: 'GMP2'}))];
+  userAnswers = new Array(currentSimulado.length).fill(null);
+  renderSimulado();
+}
+
+function renderSimulado() {
+  const c = document.getElementById('simContainer');
+  c.innerHTML = '';
+  currentSimulado.forEach((q, idx) => {
+    const card = document.createElement('div');
+    card.className = 'question-card';
+    const optsHTML = q.options.map((opt, i) => {
+      const letters = ['A', 'B', 'C', 'D'];
+      return `<div class="option" data-q="${idx}" data-opt="${i}">
+        <div class="opt-letter">${letters[i]}</div>
+        <div>${opt}</div>
+      </div>`;
+    }).join('');
+    card.innerHTML = `
+      <div class="q-num">QUESTÃO ${idx + 1} / ${currentSimulado.length} · ${q.module}</div>
+      <div class="q-text">${q.q}</div>
+      <div class="options" data-qid="${idx}">${optsHTML}</div>
+      <div class="explanation" data-explid="${idx}"><strong>Explicação:</strong> ${q.explanation}</div>
+    `;
+    c.appendChild(card);
+  });
+  c.querySelectorAll('.option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const qid = +opt.dataset.q;
+      const optIdx = +opt.dataset.opt;
+      userAnswers[qid] = optIdx;
+      const parent = opt.parentElement;
+      parent.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+    });
+  });
+  document.getElementById('submitRow').style.display = 'flex';
+}
+
+function startTimer(minutes) {
+  timeLeft = minutes * 60;
+  document.getElementById('timerStatus').textContent = 'Em andamento';
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    if (timeLeft < 0) {
+      clearInterval(timerInterval);
+      submitSimulado();
+      return;
+    }
+    const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+    const s = (timeLeft % 60).toString().padStart(2, '0');
+    document.getElementById('timerDisplay').textContent = `${m}:${s}`;
+    if (timeLeft < 600) document.getElementById('timerDisplay').style.color = '#d97706';
+    if (timeLeft < 300) document.getElementById('timerDisplay').style.color = '#dc2626';
+  }, 1000);
+}
+
+document.getElementById('startSim').addEventListener('click', () => {
+  buildSimulado(false);
+  simStarted = true;
+  startTimer(90);
+  document.getElementById('resultScreen').classList.remove('show');
+  document.getElementById('timerDisplay').style.color = 'var(--cyan)';
+});
+
+document.getElementById('reviewMode').addEventListener('click', () => {
+  buildSimulado(true);
+  simStarted = true;
+  document.getElementById('timerStatus').textContent = 'Modo revisão · sem cronômetro';
+  document.getElementById('timerDisplay').textContent = '∞';
+  document.getElementById('resultScreen').classList.remove('show');
+  if (timerInterval) clearInterval(timerInterval);
+});
+
+document.getElementById('resetSim').addEventListener('click', () => {
+  document.getElementById('simContainer').innerHTML = '';
+  document.getElementById('submitRow').style.display = 'none';
+  document.getElementById('resultScreen').classList.remove('show');
+  document.getElementById('timerDisplay').textContent = '90:00';
+  document.getElementById('timerDisplay').style.color = 'var(--cyan)';
+  document.getElementById('timerStatus').textContent = 'Aguardando início';
+  if (timerInterval) clearInterval(timerInterval);
+  simStarted = false;
+});
+
+function submitSimulado() {
+  if (timerInterval) clearInterval(timerInterval);
+  document.getElementById('timerStatus').textContent = 'Finalizado';
+  let right = 0, wrong = 0, blank = 0;
+  currentSimulado.forEach((q, i) => {
+    const opts = document.querySelectorAll(`.options[data-qid="${i}"] .option`);
+    if (userAnswers[i] === null) {
+      blank++;
+    } else if (userAnswers[i] === q.answer) {
+      right++;
+      opts[userAnswers[i]].classList.add('correct');
+    } else {
+      wrong++;
+      opts[userAnswers[i]].classList.add('wrong');
+      opts[q.answer].classList.add('correct');
+    }
+    document.querySelector(`[data-explid="${i}"]`).classList.add('show');
+  });
+  const total = currentSimulado.length;
+  const pct = Math.round(right / total * 100);
+  const score = document.getElementById('finalScore');
+  score.textContent = pct + '%';
+  score.className = 'result-score ' + (pct >= 70 ? 'pass' : 'fail');
+  document.getElementById('finalMsg').textContent = pct >= 70
+    ? `🎯 APROVADO! Você atingiu o aproveitamento mínimo de 70%. Parabéns — segue afiando os pontos fracos.`
+    : `⚠ Abaixo de 70%. Faltou ${28 - right} acerto(s). Volta nos módulos com baixo desempenho e tenta de novo.`;
+  document.getElementById('rightCount').textContent = right;
+  document.getElementById('wrongCount').textContent = wrong;
+  document.getElementById('blankCount').textContent = blank;
+  document.getElementById('resultScreen').classList.add('show');
+  document.getElementById('submitRow').style.display = 'none';
+  document.getElementById('resultScreen').scrollIntoView({ behavior: 'smooth' });
+}
+
+document.getElementById('submitSim').addEventListener('click', submitSimulado);
+
+document.getElementById('reviewAnswers').addEventListener('click', () => {
+  document.getElementById('simContainer').scrollIntoView({ behavior: 'smooth' });
+});
+
+/* Atualiza relógio */
+const dateClock = document.getElementById('dateClock');
+function tick() {
+  const d = new Date();
+  const day = d.getDate().toString().padStart(2, '0');
+  const month = (d.getMonth() + 1).toString().padStart(2, '0');
+  const year = d.getFullYear();
+  const h = d.getHours().toString().padStart(2, '0');
+  const m = d.getMinutes().toString().padStart(2, '0');
+  dateClock.textContent = `${day}.${month}.${year} · ${h}:${m}`;
+}
+tick();
+setInterval(tick, 30000);
+</script>
+</body>
+</html>
