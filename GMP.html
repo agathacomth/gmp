@@ -427,12 +427,112 @@
     .stats-row { grid-template-columns: repeat(2, 1fr); }
     .flash-grid { grid-template-columns: repeat(2, 1fr); }
     .hero-dash .big-title { font-size: 28px; }
+    .container { padding: 0 18px; }
+    .hero-dash { padding: 24px 22px; }
   }
-  @media (max-width: 600px) {
+  @media (max-width: 720px) {
+    body { padding-bottom: 60px; }
+    .container { padding: 0 14px; }
+    /* Header compacto */
+    .header-inner { padding: 10px 0; gap: 10px; }
+    .brand-logo { width: 36px; height: 36px; }
+    .brand-logo svg { width: 22px; height: 22px; }
+    .brand-text h1 { font-size: 14px; letter-spacing: 0.14em; }
+    .brand-text p { font-size: 10px; letter-spacing: 0.06em; }
+    .status-led { gap: 8px; font-size: 9px; }
+    .status-led .led:first-child { display: none; }
+    /* Nav tabs com scroll horizontal */
+    nav.module-nav {
+      gap: 4px; padding: 8px 0 12px; flex-wrap: nowrap;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    nav.module-nav::-webkit-scrollbar { display: none; }
+    nav.module-nav button {
+      padding: 9px 13px; font-size: 10px; letter-spacing: 0.1em;
+      flex-shrink: 0; white-space: nowrap;
+    }
+    /* Hero compacto */
+    .hero-dash { padding: 20px 18px; border-radius: 10px; }
+    .hero-dash h2 { font-size: 11px; }
+    .hero-dash .big-title { font-size: 24px; line-height: 1.1; }
+    .hero-dash p { font-size: 14px; }
+    /* Stats em 2 colunas mais compactas */
+    .stats-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .stat-card { padding: 14px; }
+    .stat-card .value { font-size: 24px; }
+    .stat-card .label { font-size: 9px; letter-spacing: 0.14em; }
+    .stat-card .sub { font-size: 11px; }
+    /* Painéis e gráficos */
+    .panel { padding: 16px; }
+    .panel h3 { font-size: 10px; letter-spacing: 0.16em; }
+    .chart-wrap { height: 280px; }
+    /* Plano de Voo: 2 colunas */
+    .panel > div[style*="grid-template-columns: repeat(4, 1fr)"] {
+      grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important;
+    }
+    /* Tópicos */
+    .topic-head { padding: 14px 16px; flex-wrap: wrap; gap: 8px; }
+    .topic-head .title { font-size: 16px; width: 100%; order: 1; }
+    .topic-head .meta { order: 2; flex-wrap: wrap; gap: 6px; }
+    .topic-body { padding: 16px 16px 18px; }
+    .topic-body p { font-size: 14px; }
+    .topic-body ul li { font-size: 13px; padding: 5px 0 5px 20px; }
+    .topic-body .key-fact { font-size: 13px; padding: 10px 12px; }
+    .pill { font-size: 9px; padding: 3px 7px; letter-spacing: 0.06em; }
+    /* Tip strip */
+    .tip-strip { padding: 12px 14px; font-size: 13px; flex-direction: column; gap: 6px; }
+    /* Simulado hero stacked */
+    .simulado-hero { grid-template-columns: 1fr; padding: 20px; gap: 18px; }
+    .simulado-hero h2 { font-size: 22px; }
+    .simulado-hero p { font-size: 13px; }
+    .timer-value { font-size: 36px; }
+    .btn { padding: 11px 16px; font-size: 11px; letter-spacing: 0.12em; width: 100%; }
+    .btn-row { flex-direction: column; gap: 8px; }
+    /* Question card */
+    .question-card { padding: 16px; }
+    .question-card .q-text { font-size: 15px; }
+    .option { padding: 12px; font-size: 14px; min-height: 48px; }
+    .option .opt-letter { width: 28px; height: 28px; font-size: 13px; }
+    /* Result */
+    .result-screen { padding: 22px 18px; }
+    .result-score { font-size: 64px; }
+    .result-msg { font-size: 14px; }
+    .result-breakdown { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .result-breakdown .box { padding: 12px 8px; }
+    .result-breakdown .box .num { font-size: 24px; }
+    .result-breakdown .box .lbl { font-size: 9px; letter-spacing: 0.12em; }
+    /* Flashcards 1 coluna em mobile, altura maior */
+    .flash-grid { grid-template-columns: 1fr; gap: 10px; }
+    .flashcard { height: 180px; }
+    .flash-front .question { font-size: 16px; }
+    /* Glossário 1 col */
+    .glossary-list { grid-template-columns: 1fr; gap: 10px; }
+    .glossary-item { padding: 12px 14px; }
+    .glossary-item .term { font-size: 12px; }
+    .glossary-item .def { font-size: 13px; }
+    /* Checklists em 1 coluna */
+    .checklist-block .check-item { padding: 10px 0; font-size: 14px; min-height: 40px; }
+    .checklist-block .check-item input { width: 18px; height: 18px; }
+    /* Filter chips menores */
+    .filter-bar { gap: 6px; }
+    .filter-chip { padding: 8px 12px; font-size: 10px; letter-spacing: 0.08em; }
+    .filter-bar input[type="text"] { font-size: 14px; padding: 10px 12px; min-width: 100%; }
+    footer { font-size: 9px; letter-spacing: 0.12em; padding: 16px 0; }
+    section.view { padding: 22px 0; }
+  }
+  @media (max-width: 420px) {
     .stats-row { grid-template-columns: 1fr; }
-    .flash-grid { grid-template-columns: 1fr; }
-    .header-inner { flex-direction: column; align-items: flex-start; }
-    nav.module-nav button { padding: 8px 12px; font-size: 10px; }
+    .panel > div[style*="grid-template-columns: repeat(4, 1fr)"] {
+      grid-template-columns: 1fr !important;
+    }
+    .hero-dash .big-title { font-size: 22px; }
+    .timer-value { font-size: 30px; }
+    .result-score { font-size: 50px; }
+    .result-breakdown { grid-template-columns: 1fr; }
+    .brand-text p { display: none; }
+    .pill { font-size: 8px; padding: 2px 6px; }
+    .chart-wrap { height: 240px; }
   }
 </style>
 </head>
