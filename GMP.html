@@ -996,7 +996,7 @@
           <input type="search" id="askInput" placeholder="Ex.: qual a capacidade de óleo do APU?" enterkeyhint="search" />
           <button class="btn amber" type="submit" id="askBtn">Perguntar</button>
         </div>
-        <div class="ask-hint" id="askHint">A resposta sai só do conteúdo deste cockpit, respeitando a área escolhida no filtro.</div>
+        <div class="ask-hint" id="askHint">Procura em todo o conteúdo ao mesmo tempo: GMP, Célula, Aviônica e SRM. A resposta mostra de qual módulo veio cada trecho.</div>
         <div class="ask-suggest" id="askSuggest"></div>
       </form>
       <div id="askResult"></div>
@@ -6834,7 +6834,6 @@ function search(query, limit) {
   if (!q.length) return [];
   const out = [];
   CORPUS.forEach(p => {
-    if (!(area === 'all' || p.area === area)) return;
     let s = 0, hit = 0;
     const tf = {};
     p.toks.forEach(t => tf[t] = (tf[t] || 0) + 1);
@@ -6883,7 +6882,7 @@ async function ask(query) {
   const good = hits.filter(h => h.s >= (hits[0] ? hits[0].s * 0.45 : 0));
   if (!hits.length || hits[0].cover < 0.34) {
     box.innerHTML = `<div class="ask-card"><div class="ask-kicker">Sem resposta no material</div>
-      <p class="ask-answer">Não encontrei isso no conteúdo do cockpit${area !== 'all' ? ' para a área <b>' + AREAS.find(a => a.id === area).label + '</b>' : ''}. Tente outras palavras${area !== 'all' ? ' ou mude o filtro para "Todas"' : ''}.</p></div>`;
+      <p class="ask-answer">Não encontrei isso em nenhuma parte do cockpit. Tente outras palavras.</p></div>`;
     return;
   }
   const top = good.slice(0, 5);
@@ -6971,7 +6970,7 @@ const SUGGEST = [
 ];
 function renderSuggest() {
   const el = document.getElementById('askSuggest');
-  const list = area === 'all' ? [0, 5, 9, 10, 12].map(i => SUGGEST[i]) : SUGGEST.filter(s => s.area === area);
+  const list = [0, 5, 9, 10, 12].map(i => SUGGEST[i]);
   el.innerHTML = list.length ? '<span class="lbl">Exemplos:</span>' + list.map(s => `<button type="button" class="filter-chip" data-q="${escapeHtml(s.q)}">${s.q}</button>`).join('') : '';
   el.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', () => { document.getElementById('askInput').value = b.dataset.q; ask(b.dataset.q); }));
 }
