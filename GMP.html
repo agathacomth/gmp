@@ -805,6 +805,20 @@
   header.cockpit-header { top: env(safe-area-inset-top, 0px); }
   @media (max-width: 720px) { .container { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); } }
 
+  /* Resposta organizada da Consulta */
+  .ask-topic { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--cyan); letter-spacing: .04em; margin: 2px 0 12px; line-height: 1.5; }
+  .ask-topic b { color: var(--text); font-family: inherit; }
+  .ask-def { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: var(--bg-panel-2); border: 1px solid var(--line-soft); font-size: 15px; line-height: 1.5; }
+  .ask-sec { margin: 0 0 14px; }
+  .ask-sec-h { display: block; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--amber); margin: 10px 0 6px; }
+  .ask-sec p { margin: 0; font-size: 16px; line-height: 1.6; color: var(--text); }
+  .ask-sec ul { margin: 0; padding-left: 20px; }
+  .ask-sec li { font-size: 15px; line-height: 1.55; color: var(--text); margin-bottom: 6px; }
+  .ask-go { margin: 6px 0 4px; }
+  .ask-also { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+  .ask-also ul { margin: 0; padding-left: 18px; }
+  .ask-also li { margin-bottom: 4px; }
+
 </style>
 </head>
 <body>
@@ -6873,6 +6887,71 @@ function srcLabel(p) {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+
+/* Resposta organizada: escolhe o tópico que mais responde e monta O que é / Como funciona / Onde / Quando */
+const RX_ONDE = /\b(ficam? (em|no|na|nos|nas|atrás|embaixo|em cima|dentro|do lado|perto|sob|sobre)\b|localiza|instalad[oa]s? (em|no|na)\b|compartimento|prateleira|racks?\b|painel p\d)/i;
+const RX_QUANDO = /\b(quando|acende|apaga|abaixo de|acima de|condiç|em caso|se a |se o |a cada|em até|antes do próximo)/i;
+function relevance(text, qt) { const tk = new Set(tokens(text)); let n = 0; qt.forEach(t => { if (tk.has(t) || [...tk].some(k => k.length >= 4 && (k.startsWith(t) || t.startsWith(k)))) n++; }); return n; }
+const TT = new Map();
+function topicToks(m, t) {
+  const k = m.id + ':' + t.title;
+  if (!TT.has(k)) TT.set(k, new Set(tokens([m.title, t.title, t.summary, ...(t.keyFacts || []), ...(t.bullets || [])].join(' '))));
+  return TT.get(k);
+}
+function rankTopics(query) {
+  const qt = [...new Set(tokens(query))];
+  const hits = search(query, 80);
+  const by = new Map();
+  hits.forEach(h => {
+    if (!h.p.module || h.p.topic === null) return;
+    const k = h.p.module + ':' + h.p.topic;
+    if (!by.has(k)) by.set(k, []);
+    by.get(k).push(h.s);
+  });
+  const out = [];
+  by.forEach((arr, k) => {
+    const [mid, ti] = k.split(':');
+    const m = MOD[mid], t = m.topics[+ti];
+    arr.sort((a, b) => b - a);
+    let sc = arr[0] + 0.5 * (arr[1] || 0) + 0.25 * (arr[2] || 0);
+    const head = relevance(t.title, qt), mod = relevance(m.title, qt);
+    sc *= 1 + 0.35 * head + 0.25 * mod;
+    /* Peso pela raridade: o tópico que contém as palavras mais específicas da pergunta ganha */
+    const tt = topicToks(m, t);
+    let got = 0, tot = 0;
+    qt.forEach(w => { const f = idf(w); tot += f; if (tt.has(w) || [...tt].some(k => k.length >= 4 && (k.startsWith(w) || w.startsWith(k)))) got += f; });
+    sc *= 0.3 + 0.7 * (tot ? got / tot : 0);
+    out.push({ m, t, ti: +ti, s: sc });
+  });
+  return out.sort((a, b) => b.s - a.s);
+}
+function structuredAnswer(query, best) {
+  const qt = [...new Set(tokens(query))];
+  const fq = fold(query);
+  const items = [...(best.t.keyFacts || []), ...(best.t.bullets || [])];
+  const onde = [], quando = [], como = [];
+  items.forEach((it, i) => {
+    const txt = stripTags(it);
+    const r = { html: it, rel: relevance(txt, qt), i };
+    if (RX_ONDE.test(txt) && !RX_QUANDO.test(txt.slice(0, 40))) onde.push(r);
+    else if (RX_QUANDO.test(txt)) quando.push(r);
+    else como.push(r);
+  });
+  const pick = (arr, n) => arr.sort((a, b) => b.rel - a.rel || a.i - b.i).slice(0, n).sort((a, b) => a.i - b.i);
+  const sec = {
+    oque: { label: 'O que é', body: `<p>${best.t.summary}</p>` },
+    como: { label: 'Como funciona e números principais', list: pick(como, 4) },
+    quando: { label: 'Quando atua ou quando fazer', list: pick(quando, 3) },
+    onde: { label: 'Onde fica', list: pick(onde, 2) }
+  };
+  let order = ['oque', 'como', 'quando', 'onde'];
+  if (/\bonde\b/.test(fq)) order = ['onde', 'oque', 'como', 'quando'];
+  else if (/\bquando\b|\bem que (momento|condic)/.test(fq)) order = ['quando', 'oque', 'como', 'onde'];
+  else if (/\bcomo\b/.test(fq)) order = ['oque', 'como', 'quando', 'onde'];
+  return order.map(k => sec[k]).filter(x => x.body || (x.list && x.list.length)).map(x =>
+    `<div class="ask-sec"><div class="ask-sec-h">${x.label}</div>${x.body || '<ul>' + x.list.map(r => `<li>${r.html}</li>`).join('') + '</ul>'}</div>`).join('');
+}
+
 async function ask(query) {
   query = query.trim();
   const box = document.getElementById('askResult');
@@ -6893,13 +6972,25 @@ async function ask(query) {
       <div class="from">${escapeHtml(srcLabel(h.p))}${h.p.module && h.p.topic !== null ? ` · <button class="linkish" data-goto="${h.p.module}" data-ti="${h.p.topic}">abrir tópico</button>` : h.p.module ? ` · <button class="linkish" data-goto="${h.p.module}">abrir módulo</button>` : ''}</div></div>
     </li>`).join('');
   const goto = h => h.p.module ? ` · <button class="linkish" data-goto="${h.p.module}"${h.p.topic !== null ? ` data-ti="${h.p.topic}"` : ''}>${h.p.topic !== null ? 'abrir tópico' : 'abrir módulo'}</button>` : '';
-  const local = top.slice(0, 3).map(h => `<li>${h.p.html}<span class="from-inline">${escapeHtml(srcLabel(h.p))}${goto(h)}</span></li>`).join('');
+  const ranked = rankTopics(query);
+  const best = ranked[0];
+  const glossHit = hits.find(h => h.p.kind === 'Glossário' && h.s >= hits[0].s * 0.8 && relevance(h.p.title, [...new Set(tokens(query))]) > 0);
+  const others = ranked.slice(1, 4).filter(r => r.s >= best.s * 0.35);
+  const answerHtml = best ? `
+      ${glossHit ? `<p class="ask-def">${glossHit.p.html}</p>` : ''}
+      <div class="ask-topic">${escapeHtml(best.m.code)} · ${escapeHtml(best.m.title)} › <b>${escapeHtml(best.t.title)}</b>${best.t.ref ? ' · ' + escapeHtml(best.t.ref) : ''}</div>
+      ${structuredAnswer(query, best)}
+      <div class="ask-go"><button class="btn outline" data-goto="${best.m.id}" data-ti="${best.ti}">Abrir este tópico completo</button></div>` :
+    `<ul class="ask-local">${top.slice(0, 3).map(h => `<li>${h.p.html}</li>`).join('')}</ul>`;
+  const alsoHtml = others.length ? `<div class="ask-also"><div class="ask-sec-h">Também aparece em</div><ul>${others.map(r =>
+    `<li><button class="linkish" data-goto="${r.m.id}" data-ti="${r.ti}">${escapeHtml(r.m.code)} · ${escapeHtml(r.t.title)}</button></li>`).join('')}</ul></div>` : '';
   box.innerHTML = `
     <div class="ask-card">
-      <div class="ask-kicker" id="askKicker">O que o material diz</div>
-      <div class="ask-answer" id="askAnswer"><ul class="ask-local">${local}</ul></div>
-      <div class="ask-meta" id="askMeta">Os 3 trechos do cockpit mais próximos da sua pergunta, do mais para o menos parecido.</div>
+      <div class="ask-kicker" id="askKicker">Resposta do material</div>
+      <div class="ask-answer" id="askAnswer">${answerHtml}</div>
       <div class="ask-ai" id="askAi" hidden></div>
+      ${alsoHtml}
+      <div class="ask-meta" id="askMeta">Montada com o texto do tópico que mais responde à sua pergunta.</div>
     </div>
     <div class="ask-card" id="askSourcesCard" hidden>
       <div class="ask-kicker">Fontes do resumo</div>
@@ -6912,12 +7003,17 @@ async function ask(query) {
   if (aiOff) return;
   const sample = await getSample();
   if (!sample) return;
-  const ctx = top.map((h, i) => `[${i + 1}] (${srcLabel(h.p)}) ${stripTags(h.p.html)}`).join('\n');
+  const topicTxt = best ? [best.t.summary, ...(best.t.keyFacts || []), ...(best.t.bullets || [])].map(stripTags) : [];
+  const srcList = [...topicTxt.map(t => ({ label: best.m.code + ' · ' + best.t.title, t })), ...top.map(h => ({ label: srcLabel(h.p), t: stripTags(h.p.html) }))];
+  const ctx = srcList.map((x, i) => `[${i + 1}] (${x.label}) ${x.t}`).join('\n');
+  box.querySelector('.ask-sources').innerHTML = srcList.map((x, i) => `<li class="ask-src"><span class="n">${i + 1}</span><div><div class="txt">${escapeHtml(x.t)}</div><div class="from">${escapeHtml(x.label)}</div></div></li>`).join('');
   const prompt =
 `Você é o assistente de um material de estudo para a prova da ANAC (mecânico de manutenção aeronáutica).
 Responda à pergunta do aluno usando SOMENTE os trechos numerados abaixo. Não use conhecimento de fora.
 Regras:
-- Português do Brasil, direto, no máximo 3 frases curtas.
+- Português do Brasil, claro e didático, para quem está estudando para a prova.
+- Organize em blocos curtos com estes títulos, nesta ordem, só os que os trechos permitirem responder: "O que é:", "Como funciona:", "Onde fica:", "Quando atua:". Comece pelo bloco que a pergunta pede.
+- Cada bloco com 1 a 3 frases. Inclua os números importantes (pressões, temperaturas, limites).
 - Cite a fonte com [n] logo depois de cada informação.
 - Se os trechos não respondem à pergunta, escreva apenas: Não encontrei isso no material do cockpit.
 - Não use travessão. Não escreva introdução nem despedida.
@@ -6932,10 +7028,11 @@ Pergunta: ${query}`;
   ai.innerHTML = '<span class="ask-thinking">Claude está resumindo os trechos…</span>';
   askCtl = new AbortController();
   const render = text => {
-    const html = escapeHtml(text).replace(/\[(\d)\]/g, '<sup class="cite">$1</sup>');
-    document.getElementById('askKicker').textContent = 'Resposta enxuta';
+    const html = escapeHtml(text).replace(/\[(\d+)\]/g, '<sup class="cite">$1</sup>')
+      .replace(/^(O que é|Como funciona|Onde fica|Quando atua):/gm, '<span class="ask-sec-h">$1</span>').replace(/\n/g, '<br>');
+    document.getElementById('askKicker').textContent = 'Resposta explicada';
     document.getElementById('askAnswer').innerHTML = html;
-    document.getElementById('askMeta').textContent = 'Resumo escrito pelo Claude só com os trechos abaixo. Os números indicam a fonte.';
+    document.getElementById('askMeta').textContent = 'Escrita pelo Claude só com o texto do material listado abaixo. Os números indicam a fonte.';
     ai.hidden = true;
     document.getElementById('askSourcesCard').hidden = false;
   };
